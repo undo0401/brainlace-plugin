@@ -2,16 +2,19 @@
 
 Brainlace is a filesystem-first second-brain bridge: humans can keep editing
 Markdown notes in Obsidian or any future editor, while LIN/Hermes gets stable
-agent-readable tools for indexing, searching, linking, and writing notes.
+agent-readable tools for indexing, searching, linking, moving, planning, and
+writing notes.
 """
 
 from __future__ import annotations
 
+import difflib
 import importlib.util
 import json
 import os
 import re
-from collections import Counter
+import shutil
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -25,10 +28,12 @@ _SCHEMAS_SPEC.loader.exec_module(schemas)
 PLUGIN_NAME = "brainlace"
 DEFAULT_HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data")).expanduser()
 DEFAULT_NOTES_ROOT = os.environ.get("BRAINLACE_NOTES_ROOT", "notes")
-INDEX_VERSION = 1
-WIKILINK_RE = re.compile(r"!??\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]")
+INDEX_VERSION = 2
+WIKILINK_RE = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]+)?(?:\|([^\]]+))?\]\]")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]{2,}|[\u3040-\u30ff\u3400-\u9fff]{2,}")
+SOURCE_SKIP_DIRS = {".obsidian", ".git", "archive", "archives", ".archive", "legacy"}
+TARGET_SKIP_DIRS = {".obsidian", ".git"}
 
 
 def _json(payload: Any) -> str:
@@ -149,41 +154,8 @@ def _frontmatter(title: str, tags: list[str], aliases: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _extract_note(path: Path, notes_root: Path, vault_root: Path) -> dict[str, Any]:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    frontmatter, body = _parse_frontmatter(text)
-    rel_notes = path.relative_to(notes_root).as_posix()
-    rel_vault = path.relative_to(vault_root).as_posix()
-    title = str(frontmatter.get("title") or path.stem).strip()
-    tags = _normalize_list(frontmatter.get("tags"))
-    aliases = _normalize_list(frontmatter.get("aliases"))
-    links = []
-    seen_links: set[str] = set()
-    for match in WIKILINK_RE.finditer(text):
-        link = match.group(1).strip()
-        if link and link not in seen_links:
-            seen_links.add(link)
-            links.append(link)
-    headings = [m.group(2).strip() for m in HEADING_RE.finditer(body)][:30]
-    plain = re.sub(r"```.*?```", " ", body, flags=re.S)
-    plain = re.sub(r"[#>*_`\[\](){}]", " ", plain)
-    plain = re.sub(r"\s+", " ", plain).strip()
-    summary = plain[:420]
-    return {
-        "title": title,
-        "path": str(path),
-        "rel_path": rel_vault,
-        "rel_notes_path": rel_notes,
-        "stem": path.stem,
-        "tags": tags,
-        "aliases": aliases,
-        "links": links,
-        "headings": headings,
-        "summary": summary,
-        "mtime": path.stat().st_mtime,
-        "updated_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds"),
-        "size": path.stat().st_size,
-    }
+def _path_has_part(path: Path, names: set[str]) -> bool:
+    return any(part.lower() in names for part in path.parts)
 
 
 def _should_skip(path: Path, *, include_archives: bool) -> bool:
@@ -195,6 +167,179 @@ def _should_skip(path: Path, *, include_archives: bool) -> bool:
     return any(part in {"archive", "archives", ".archive", "legacy"} for part in parts)
 
 
+def _should_skip_target(path: Path) -> bool:
+    return _path_has_part(path, TARGET_SKIP_DIRS)
+
+
+def _plain_summary(body: str, limit: int = 420) -> str:
+    plain = re.sub(r"```.*?```", " ", body, flags=re.S)
+    plain = re.sub(r"[#>*_`\[\](){}]", " ", plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    return plain[:limit]
+
+
+def _extract_note(path: Path, notes_root: Path, vault_root: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    frontmatter, body = _parse_frontmatter(text)
+    rel_notes = path.relative_to(notes_root).as_posix()
+    rel_vault = path.relative_to(vault_root).as_posix()
+    title = str(frontmatter.get("title") or path.stem).strip()
+    tags = _normalize_list(frontmatter.get("tags"))
+    aliases = _normalize_list(frontmatter.get("aliases"))
+    links = []
+    embedded_links = []
+    seen_links: set[str] = set()
+    for match in WIKILINK_RE.finditer(text):
+        link = match.group(2).strip()
+        if not link or link in seen_links:
+            continue
+        seen_links.add(link)
+        links.append(link)
+        if match.group(1) == "!":
+            embedded_links.append(link)
+    headings = [m.group(2).strip() for m in HEADING_RE.finditer(body)][:30]
+    category = path.relative_to(notes_root).parts[0] if len(path.relative_to(notes_root).parts) > 1 else ""
+    return {
+        "title": title,
+        "path": str(path),
+        "rel_path": rel_vault,
+        "rel_notes_path": rel_notes,
+        "category": category,
+        "stem": path.stem,
+        "tags": tags,
+        "aliases": aliases,
+        "links": links,
+        "embedded_links": embedded_links,
+        "headings": headings,
+        "first_heading": headings[0] if headings else None,
+        "summary": _plain_summary(body),
+        "frontmatter": frontmatter,
+        "frontmatter_updated": frontmatter.get("updated"),
+        "frontmatter_created": frontmatter.get("created"),
+        "is_index": path.name == "INDEX.md",
+        "is_moc": path.name == "MOC.md",
+        "outbound_count": len(links),
+        "inbound_count": 0,
+        "backlinks": [],
+        "mtime": path.stat().st_mtime,
+        "updated_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds"),
+        "size": path.stat().st_size,
+    }
+
+
+def _target_key(value: str) -> str:
+    return str(value or "").strip().removesuffix(".md").lower()
+
+
+def _add_candidate_paths(base: Path, raw: str, out: list[Path]) -> None:
+    raw_path = Path(raw)
+    candidates = [base / raw_path]
+    if raw_path.suffix == "":
+        candidates.append(base / (raw + ".md"))
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in out:
+            out.append(resolved)
+
+
+def _link_candidates(source_path: Path, raw_target: str, vault_root: Path, notes_root: Path) -> list[Path]:
+    raw = str(raw_target or "").strip().removesuffix(".md")
+    out: list[Path] = []
+    source_dir = source_path.parent
+    is_path_like = raw.startswith("../") or raw.startswith("./") or raw.startswith("/") or "/" in raw or "\\" in raw
+    raw = raw.replace("\\", "/")
+    if raw.startswith("/"):
+        _add_candidate_paths(vault_root, raw.lstrip("/"), out)
+        _add_candidate_paths(notes_root, raw.lstrip("/"), out)
+    elif is_path_like:
+        _add_candidate_paths(source_dir, raw, out)
+        _add_candidate_paths(notes_root, raw, out)
+        _add_candidate_paths(vault_root, raw, out)
+    else:
+        _add_candidate_paths(source_dir, raw, out)
+        _add_candidate_paths(notes_root, raw, out)
+        for base in notes_root.rglob(raw + ".md"):
+            if base.is_file():
+                resolved = base.resolve()
+                if resolved not in out:
+                    out.append(resolved)
+    return out
+
+
+def _target_maps(records: list[dict[str, Any]]) -> tuple[set[str], dict[str, str], dict[str, dict[str, Any]]]:
+    names: set[str] = set()
+    key_to_rel: dict[str, str] = {}
+    rel_to_record: dict[str, dict[str, Any]] = {}
+    for row in records:
+        rel = str(row.get("rel_path") or "")
+        rel_notes = str(row.get("rel_notes_path") or "")
+        rel_to_record[rel] = row
+        values = [row.get("stem"), row.get("title"), rel_notes[:-3] if rel_notes.lower().endswith(".md") else rel_notes, rel[:-3] if rel.lower().endswith(".md") else rel]
+        values.extend(row.get("aliases") or [])
+        for value in values:
+            key = _target_key(str(value or ""))
+            if key:
+                names.add(key)
+                key_to_rel.setdefault(key, rel)
+    return names, key_to_rel, rel_to_record
+
+
+def _resolve_wikilink(source_path: Path, raw_target: str, records: list[dict[str, Any]], vault_root: Path, notes_root: Path) -> dict[str, Any]:
+    target_names, key_to_rel, _ = _target_maps(records)
+    normalized = _target_key(raw_target)
+    if normalized in target_names:
+        return {"ok": True, "kind": "note", "rel_path": key_to_rel.get(normalized), "method": "name"}
+    for candidate in _link_candidates(source_path, raw_target, vault_root, notes_root):
+        if candidate.exists() and candidate.is_file():
+            try:
+                candidate.relative_to(vault_root)
+            except ValueError:
+                continue
+            if _should_skip_target(candidate):
+                continue
+            rel = candidate.relative_to(vault_root).as_posix()
+            return {"ok": True, "kind": "file", "rel_path": rel, "path": str(candidate), "method": "path"}
+    return {"ok": False, "kind": "missing", "target": raw_target}
+
+
+def _annotate_graph(records: list[dict[str, Any]], vault_root: Path, notes_root: Path) -> None:
+    _, _, rel_to_record = _target_maps(records)
+    inbound: defaultdict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in records:
+        source_path = Path(str(row.get("path"))).resolve()
+        for link in row.get("links") or []:
+            resolved = _resolve_wikilink(source_path, str(link), records, vault_root, notes_root)
+            target_rel = resolved.get("rel_path")
+            if target_rel in rel_to_record:
+                inbound[str(target_rel)].append({"source": str(row.get("rel_path")), "link": str(link)})
+    for row in records:
+        backlinks = inbound.get(str(row.get("rel_path")), [])
+        row["inbound_count"] = len(backlinks)
+        row["backlinks"] = backlinks[:50]
+
+
+def _broken_links(records: list[dict[str, Any]], vault_root: Path, notes_root: Path) -> list[dict[str, Any]]:
+    broken: list[dict[str, Any]] = []
+    for row in records:
+        source_path = Path(str(row.get("path"))).resolve()
+        for link in row.get("links") or []:
+            resolved = _resolve_wikilink(source_path, str(link), records, vault_root, notes_root)
+            if not resolved.get("ok"):
+                broken.append({"source": row.get("rel_path"), "link": link})
+    return broken
+
+
+def _orphan_notes(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for row in records:
+        rel = str(row.get("rel_path"))
+        if rel.endswith("INDEX.md") or rel.endswith("MOC.md"):
+            continue
+        if int(row.get("inbound_count") or 0) == 0 and not row.get("links"):
+            out.append({"title": row.get("title"), "rel_path": rel, "path": row.get("path")})
+    return out
+
+
 def _build_index(root: str | None = None, notes_root: str | None = None, *, include_archives: bool = False, max_notes: int | None = None) -> dict[str, Any]:
     vault = _resolve_vault_root(root)
     notes = _resolve_notes_root(vault, notes_root)
@@ -202,8 +347,8 @@ def _build_index(root: str | None = None, notes_root: str | None = None, *, incl
     if max_notes is not None and len(md_files) > max_notes:
         md_files = md_files[:max_notes]
     records = [_extract_note(path, notes, vault) for path in md_files]
-    link_targets = _target_names(records)
-    broken = _broken_links(records, link_targets)
+    _annotate_graph(records, vault, notes)
+    broken = _broken_links(records, vault, notes)
     payload = {
         "schema_version": INDEX_VERSION,
         "kind": "brainlace.index",
@@ -215,7 +360,11 @@ def _build_index(root: str | None = None, notes_root: str | None = None, *, incl
         "records": records,
         "summary": {
             "tag_counts": Counter(tag for row in records for tag in row.get("tags", [])).most_common(50),
+            "category_counts": Counter(row.get("category") or "root" for row in records).most_common(50),
             "broken_link_count": len(broken),
+            "orphan_note_count": len(_orphan_notes(records)),
+            "index_count": sum(1 for row in records if row.get("is_index")),
+            "moc_count": sum(1 for row in records if row.get("is_moc")),
             "index_path": str(_index_path()),
         },
         "policy": {
@@ -234,6 +383,8 @@ def _load_index(root: str | None = None, notes_root: str | None = None, *, refre
     payload = json.loads(_index_path().read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise RuntimeError(f"Brainlace index must be a JSON object: {_index_path()}")
+    if payload.get("schema_version") != INDEX_VERSION:
+        return _build_index(root, notes_root)
     if root or notes_root:
         vault = str(_resolve_vault_root(root)) if root else payload.get("vault_root")
         notes = str(_resolve_notes_root(Path(vault), notes_root)) if notes_root and vault else payload.get("notes_root")
@@ -253,6 +404,7 @@ def _record_haystack(row: dict[str, Any]) -> str:
         str(row.get("title") or ""),
         str(row.get("rel_path") or ""),
         str(row.get("rel_notes_path") or ""),
+        str(row.get("category") or ""),
         str(row.get("summary") or ""),
     ]
     for key in ("tags", "aliases", "headings", "links"):
@@ -260,85 +412,67 @@ def _record_haystack(row: dict[str, Any]) -> str:
     return "\n".join(values)
 
 
-def _score_query(row: dict[str, Any], query: str) -> float:
+def _score_query(row: dict[str, Any], query: str) -> tuple[float, list[str]]:
     q = query.strip().lower()
     if not q:
-        return 0.0
+        return 0.0, []
     haystack = _record_haystack(row).lower()
-    score = 0.0
-    if q in haystack:
-        score += 5.0
     q_tokens = _tokens(query)
+    score = 0.0
+    reasons: list[str] = []
+    title = str(row.get("title") or "").lower()
+    aliases = [str(v).lower() for v in row.get("aliases") or []]
+    tags = [str(v).lower() for v in row.get("tags") or []]
+    category = str(row.get("category") or "").lower()
+    if q == title:
+        score += 18.0
+        reasons.append("exact-title")
+    elif q in title:
+        score += 10.0
+        reasons.append("title")
+    if any(q == alias for alias in aliases):
+        score += 14.0
+        reasons.append("exact-alias")
+    elif any(q in alias for alias in aliases):
+        score += 8.0
+        reasons.append("alias")
+    if any(q == tag for tag in tags):
+        score += 7.0
+        reasons.append("tag")
+    if q and q in category:
+        score += 3.0
+        reasons.append("category")
+    if q in haystack:
+        score += 4.0
+        reasons.append("phrase")
     h_tokens = _tokens(haystack)
     if q_tokens:
         overlap = q_tokens & h_tokens
-        score += len(overlap) / max(1, len(q_tokens)) * 4.0
-    title = str(row.get("title") or "").lower()
-    if q in title:
-        score += 3.0
-    return score
+        if overlap:
+            score += len(overlap) / max(1, len(q_tokens)) * 5.0
+            reasons.extend(sorted(overlap)[:8])
+    inbound = min(int(row.get("inbound_count") or 0), 10)
+    score += inbound * 0.05
+    return score, reasons
 
 
-def _result_row(row: dict[str, Any], score: float) -> dict[str, Any]:
+def _result_row(row: dict[str, Any], score: float, reasons: list[str] | None = None) -> dict[str, Any]:
     return {
         "score": round(score, 3),
         "title": row.get("title"),
         "rel_path": row.get("rel_path"),
         "rel_notes_path": row.get("rel_notes_path"),
+        "category": row.get("category"),
         "path": row.get("path"),
         "tags": row.get("tags") or [],
         "aliases": row.get("aliases") or [],
         "headings": (row.get("headings") or [])[:8],
         "summary": row.get("summary"),
+        "inbound_count": row.get("inbound_count") or 0,
+        "outbound_count": row.get("outbound_count") or 0,
         "updated_at": row.get("updated_at"),
+        "match_reasons": reasons or [],
     }
-
-
-def _target_names(records: list[dict[str, Any]]) -> set[str]:
-    names: set[str] = set()
-    for row in records:
-        names.add(str(row.get("stem") or "").lower())
-        names.add(str(row.get("title") or "").lower())
-        for alias in row.get("aliases") or []:
-            names.add(str(alias).lower())
-        rel = str(row.get("rel_notes_path") or "")
-        if rel.lower().endswith(".md"):
-            names.add(rel[:-3].lower())
-    return {name for name in names if name}
-
-
-def _broken_links(records: list[dict[str, Any]], targets: set[str]) -> list[dict[str, Any]]:
-    broken: list[dict[str, Any]] = []
-    for row in records:
-        for link in row.get("links") or []:
-            normalized = str(link).strip().removesuffix(".md").lower()
-            if normalized not in targets:
-                broken.append({"source": row.get("rel_path"), "link": link})
-    return broken
-
-
-def _orphan_notes(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    inbound: Counter[str] = Counter()
-    by_name: dict[str, dict[str, Any]] = {}
-    for row in records:
-        names = {str(row.get("stem") or "").lower(), str(row.get("title") or "").lower()}
-        names.update(str(alias).lower() for alias in row.get("aliases") or [])
-        for name in names:
-            if name:
-                by_name[name] = row
-    for row in records:
-        for link in row.get("links") or []:
-            normalized = str(link).strip().removesuffix(".md").lower()
-            if normalized in by_name:
-                inbound[str(by_name[normalized].get("rel_path"))] += 1
-    out = []
-    for row in records:
-        rel = str(row.get("rel_path"))
-        if rel.endswith("INDEX.md") or rel.endswith("MOC.md"):
-            continue
-        if inbound[rel] == 0 and not row.get("links"):
-            out.append({"title": row.get("title"), "rel_path": rel, "path": row.get("path")})
-    return out
 
 
 def _tool_status(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
@@ -362,6 +496,7 @@ def _tool_status(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
         "index_exists": index_exists,
         "indexed_note_count": index_payload.get("note_count"),
         "index_generated_at": index_payload.get("generated_at"),
+        "index_schema_version": index_payload.get("schema_version"),
         "markdown_note_count": md_count,
         "policy": {
             "human_editor": "Obsidian or any filesystem editor",
@@ -394,10 +529,10 @@ def _tool_search(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
     for row in payload.get("records") or []:
         if not isinstance(row, dict):
             continue
-        score = _score_query(row, query)
+        score, reasons = _score_query(row, query)
         if score > 0:
-            scored.append(_result_row(row, score))
-    scored.sort(key=lambda item: item["score"], reverse=True)
+            scored.append(_result_row(row, score, reasons))
+    scored.sort(key=lambda item: (item["score"], item.get("inbound_count") or 0, item.get("updated_at") or ""), reverse=True)
     return _json({"ok": True, "query": query, "index_generated_at": payload.get("generated_at"), "results": scored[:limit], "total_matches": len(scored)})
 
 
@@ -413,16 +548,50 @@ def _tool_related(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
     for row in payload.get("records") or []:
         if not isinstance(row, dict):
             continue
+        score, reasons = _score_query(row, text)
         hay = _tokens(_record_haystack(row))
         overlap = needle & hay
-        if not overlap:
+        if overlap:
+            score += len(overlap) / max(1, len(needle)) * 8
+            reasons.extend(sorted(overlap)[:12])
+        if score <= 0:
             continue
-        score = len(overlap) / max(1, len(needle))
-        item = _result_row(row, score * 10)
+        item = _result_row(row, score, sorted(set(reasons))[:20])
         item["matched_terms"] = sorted(overlap)[:20]
         results.append(item)
-    results.sort(key=lambda item: item["score"], reverse=True)
+    results.sort(key=lambda item: (item["score"], item.get("inbound_count") or 0, item.get("updated_at") or ""), reverse=True)
     return _json({"ok": True, "index_generated_at": payload.get("generated_at"), "results": results[:limit], "total_matches": len(results)})
+
+
+def _short_note_summary(body: str) -> str:
+    return _plain_summary(body, 120)
+
+
+def _category_index_link_line(note_path: Path, category_dir: Path, title: str, body: str = "") -> str:
+    rel = note_path.relative_to(category_dir).with_suffix("").as_posix()
+    summary = _short_note_summary(body)
+    suffix = f" — {summary}" if summary else ""
+    return f"- [[{rel}|{title}]]{suffix}"
+
+
+def _wire_category_index(category_dir: Path, category_name: str, note_path: Path, title: str, body: str) -> Path:
+    index_path = category_dir / "INDEX.md"
+    line = _category_index_link_line(note_path, category_dir, title, body)
+    if not index_path.exists():
+        content = f"# {category_name}\n\nこの階層の入口。Brainlace が作成・更新したノートへの導線を置く。\n\n## この階層のノート\n\n{line}\n"
+        index_path.write_text(content, encoding="utf-8")
+        return index_path
+    current = index_path.read_text(encoding="utf-8", errors="replace")
+    target = f"[[{note_path.relative_to(category_dir).with_suffix('').as_posix()}"
+    if target in current or f"[[{note_path.stem}]]" in current or f"[[{note_path.stem}|" in current:
+        return index_path
+    if "## この階層のノート" not in current:
+        sep = "" if current.endswith("\n") else "\n"
+        current = current + sep + "\n## この階層のノート\n\n"
+    if not current.endswith("\n"):
+        current += "\n"
+    index_path.write_text(current + line + "\n", encoding="utf-8")
+    return index_path
 
 
 def _tool_create_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
@@ -447,15 +616,7 @@ def _tool_create_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> s
     path.write_text(content, encoding="utf-8")
     index_path = None
     if bool(params.get("wire_index", True)):
-        index_path = category_dir / "INDEX.md"
-        link = f"- [[{path.stem}]]"
-        if index_path.exists():
-            current = index_path.read_text(encoding="utf-8", errors="replace")
-            if link not in current:
-                sep = "" if current.endswith("\n") else "\n"
-                index_path.write_text(current + sep + link + "\n", encoding="utf-8")
-        else:
-            index_path.write_text(f"# {category}\n\n{link}\n", encoding="utf-8")
+        index_path = _wire_category_index(category_dir, category, path, title, body)
     _build_index(str(vault), str(notes))
     return _json({"ok": True, "path": str(path), "rel_path": path.relative_to(vault).as_posix(), "index_path": str(index_path) if index_path else None})
 
@@ -468,13 +629,18 @@ def _resolve_note_path(vault: Path, notes: Path, raw_path: str) -> Path:
     if not candidate.is_absolute():
         direct = (vault / candidate).resolve()
         under_notes = (notes / candidate).resolve()
-        candidate = direct if direct.exists() else under_notes
+        if direct.exists():
+            candidate = direct
+        elif under_notes.exists():
+            candidate = under_notes
+        else:
+            candidate = direct if str(raw).startswith("notes/") else under_notes
     candidate = candidate.resolve()
     _assert_under(candidate, vault, label="note path")
     if not candidate.exists() or not candidate.is_file():
         raise RuntimeError(f"note not found: {candidate}")
     if candidate.suffix.lower() != ".md":
-        raise RuntimeError(f"Brainlace only appends to Markdown notes: {candidate}")
+        raise RuntimeError(f"Brainlace only edits Markdown notes: {candidate}")
     return candidate
 
 
@@ -500,13 +666,152 @@ def _tool_append_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> s
     return _json({"ok": True, "path": str(path), "rel_path": path.relative_to(vault).as_posix(), "appended_chars": len(block)})
 
 
+def _unified_diff(path: Path, before: str, after: str) -> str:
+    return "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), fromfile=str(path), tofile=str(path)))
+
+
+def _tool_patch_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    vault = _resolve_vault_root(params.get("root"))
+    notes = _resolve_notes_root(vault, params.get("notes_root"))
+    path = _resolve_note_path(vault, notes, str(params.get("path") or ""))
+    old = str(params.get("old_string") if params.get("old_string") is not None else "")
+    new = str(params.get("new_string") if params.get("new_string") is not None else "")
+    if old == "":
+        raise RuntimeError("old_string is required")
+    replace_all = bool(params.get("replace_all", False))
+    dry_run = bool(params.get("dry_run", False))
+    current = path.read_text(encoding="utf-8", errors="replace")
+    count = current.count(old)
+    if count == 0:
+        raise RuntimeError("old_string not found in note")
+    if count > 1 and not replace_all:
+        raise RuntimeError(f"old_string matched {count} times; pass replace_all=true or provide more context")
+    updated = current.replace(old, new) if replace_all else current.replace(old, new, 1)
+    diff = _unified_diff(path, current, updated)
+    if not dry_run:
+        path.write_text(updated, encoding="utf-8")
+        _build_index(str(vault), str(notes))
+    return _json({"ok": True, "dry_run": dry_run, "path": str(path), "rel_path": path.relative_to(vault).as_posix(), "replacements": count if replace_all else 1, "diff": diff})
+
+
+def _relative_link_target(source_path: Path, target_path: Path, notes_root: Path) -> str:
+    if source_path.parent == target_path.parent:
+        return target_path.stem
+    rel = os.path.relpath(target_path.with_suffix(""), source_path.parent)
+    return Path(rel).as_posix()
+
+
+def _replace_wikilinks_to_path(text: str, source_path: Path, old_path: Path, new_path: Path, records: list[dict[str, Any]], vault: Path, notes: Path) -> tuple[str, int]:
+    changed = 0
+
+    def repl(match: re.Match[str]) -> str:
+        nonlocal changed
+        embed, raw, heading, alias = match.group(1), match.group(2), match.group(3) or "", match.group(4)
+        resolved = _resolve_wikilink(source_path, raw, records, vault, notes)
+        target_rel = resolved.get("rel_path")
+        old_rel = old_path.relative_to(vault).as_posix()
+        if target_rel != old_rel:
+            return match.group(0)
+        changed += 1
+        new_raw = _relative_link_target(source_path, new_path, notes)
+        alias_part = f"|{alias}" if alias else ""
+        return f"{embed}[[{new_raw}{heading}{alias_part}]]"
+
+    return WIKILINK_RE.sub(repl, text), changed
+
+
+def _destination_note_path(vault: Path, notes: Path, params: dict[str, Any]) -> Path:
+    dest_path = str(params.get("dest_path") or "").strip()
+    if dest_path:
+        candidate = Path(dest_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = (vault / candidate if dest_path.startswith("notes/") else notes / candidate).resolve()
+        if candidate.suffix.lower() != ".md":
+            candidate = candidate.with_suffix(".md")
+        return candidate.resolve()
+    category = str(params.get("category") or "").strip().strip("/")
+    title = str(params.get("title") or "").strip()
+    if not category or not title:
+        raise RuntimeError("dest_path or both category and title are required")
+    return (notes / category / _safe_filename(title)).resolve()
+
+
+def _tool_move_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    vault = _resolve_vault_root(params.get("root"))
+    notes = _resolve_notes_root(vault, params.get("notes_root"))
+    source = _resolve_note_path(vault, notes, str(params.get("source_path") or params.get("path") or ""))
+    dest = _destination_note_path(vault, notes, params)
+    _assert_under(dest, vault, label="destination")
+    if dest.exists() and not bool(params.get("overwrite", False)):
+        raise RuntimeError(f"destination already exists: {dest}")
+    dry_run = bool(params.get("dry_run", False))
+    update_links = bool(params.get("update_links", True))
+    wire_index = bool(params.get("wire_index", True))
+    payload = _build_index(str(vault), str(notes))
+    records = [row for row in payload.get("records") or [] if isinstance(row, dict)]
+    planned: list[dict[str, Any]] = []
+    if update_links:
+        for md in sorted(p for p in notes.rglob("*.md") if p.is_file() and not _should_skip(p, include_archives=False)):
+            before = md.read_text(encoding="utf-8", errors="replace")
+            after, count = _replace_wikilinks_to_path(before, md, source, dest, records, vault, notes)
+            if count:
+                planned.append({"path": str(md), "rel_path": md.relative_to(vault).as_posix(), "replacements": count, "diff": _unified_diff(md, before, after)})
+                if not dry_run:
+                    md.write_text(after, encoding="utf-8")
+    if not dry_run:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(dest))
+        if wire_index:
+            text = dest.read_text(encoding="utf-8", errors="replace")
+            fm, body = _parse_frontmatter(text)
+            title = str(fm.get("title") or dest.stem)
+            _wire_category_index(dest.parent, dest.parent.relative_to(notes).as_posix(), dest, title, body)
+        _build_index(str(vault), str(notes))
+    return _json({"ok": True, "dry_run": dry_run, "source": source.relative_to(vault).as_posix(), "destination": dest.relative_to(vault).as_posix(), "updated_link_files": planned})
+
+
+def _tool_plan_note_update(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    text = str(params.get("text") or params.get("query") or "").strip()
+    if not text:
+        raise RuntimeError("text or query is required")
+    limit = max(1, int(params.get("limit") or 5))
+    action_hint = str(params.get("action_hint") or "append").strip() or "append"
+    payload = _load_index(params.get("root"), params.get("notes_root"), refresh=bool(params.get("refresh", False)))
+    candidates = []
+    for row in payload.get("records") or []:
+        if not isinstance(row, dict) or row.get("is_index"):
+            continue
+        score, reasons = _score_query(row, text)
+        hay = _tokens(_record_haystack(row))
+        overlap = _tokens(text) & hay
+        if overlap:
+            score += len(overlap) * 1.5
+            reasons.extend(sorted(overlap))
+        if score > 0:
+            candidates.append(_result_row(row, score, sorted(set(reasons))[:12]))
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    top = candidates[:limit]
+    suggested_category = top[0].get("category") if top else "Inbox"
+    recommendation = {
+        "action": "append" if top and action_hint != "create" else "create",
+        "target": top[0].get("rel_path") if top and action_hint != "create" else None,
+        "category": suggested_category,
+        "reason": "既存ノートの語彙・タイトル・リンクと近い" if top else "近い既存ノートが弱いので新規作成候補",
+    }
+    return _json({"ok": True, "query": text, "recommendation": recommendation, "candidates": top})
+
+
 def _tool_check_links(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
     params = params or {}
     limit = max(1, int(params.get("limit") or 50))
     payload = _load_index(params.get("root"), params.get("notes_root"), refresh=bool(params.get("refresh", False)))
     records = [row for row in payload.get("records") or [] if isinstance(row, dict)]
-    targets = _target_names(records)
-    broken = _broken_links(records, targets)
+    vault = Path(str(payload.get("vault_root"))).resolve()
+    notes = Path(str(payload.get("notes_root"))).resolve()
+    broken = _broken_links(records, vault, notes)
     orphans = _orphan_notes(records)
     return _json({
         "ok": True,
@@ -520,7 +825,7 @@ def _tool_check_links(params: dict[str, Any] | None = None, **_kwargs: Any) -> s
 
 
 def _register_tool(ctx, *, name: str, schema: dict[str, Any], handler: Any, description: str) -> None:
-    ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description)
+    ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description, emoji="🧠")
 
 
 def register(ctx) -> None:
@@ -534,6 +839,9 @@ def register(ctx) -> None:
         ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, "Find notes related to provided text."),
         ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
         ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
+        ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),
+        ("brainlace_move_note", schemas.BRAINLACE_MOVE_NOTE, _tool_move_note, "Move or rename a Brainlace note and update inbound links."),
+        ("brainlace_plan_note_update", schemas.BRAINLACE_PLAN_NOTE_UPDATE, _tool_plan_note_update, "Plan where a note update should land."),
         ("brainlace_check_links", schemas.BRAINLACE_CHECK_LINKS, _tool_check_links, "Check broken wikilinks and orphan notes."),
     ]
     for name, schema, handler, description in tools:

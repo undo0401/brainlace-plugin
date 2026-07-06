@@ -15,30 +15,59 @@ def load_plugin():
     return module
 
 
-def test_index_search_create_append_check_links():
+def test_index_search_create_append_patch_move_plan_check_links():
     plugin = load_plugin()
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp)
         notes = vault / "notes"
         notes.mkdir()
+        (vault / "designs").mkdir()
+        (vault / "designs" / "mesh.md").write_text("# Mesh design\n", encoding="utf-8")
         (notes / "INDEX.md").write_text("# Notes\n\n- [[Alpha]]\n", encoding="utf-8")
-        (notes / "Alpha.md").write_text("---\ntitle: Alpha\ntags:\n  - test\n---\n# Alpha\n\nBrainlace mesh note. [[Missing]]\n", encoding="utf-8")
+        (notes / "Alpha.md").write_text(
+            "---\ntitle: Alpha\ntags:\n  - test\n---\n# Alpha\n\nBrainlace mesh note. [[Missing]] [[../designs/mesh]]\n",
+            encoding="utf-8",
+        )
 
         indexed = json.loads(plugin._tool_index({"root": str(vault)}))
         assert indexed["ok"] is True
         assert indexed["note_count"] == 2
+        assert indexed["summary"]["broken_link_count"] == 1
 
-        search = json.loads(plugin._tool_search({"root": str(vault), "query": "mesh"}))
+        search = json.loads(plugin._tool_search({"root": str(vault), "query": "Alpha"}))
         assert search["results"]
         assert search["results"][0]["title"] == "Alpha"
+        assert "category" in search["results"][0]
 
         created = json.loads(plugin._tool_create_note({"root": str(vault), "category": "Ideas", "title": "Beta", "body": "Brainlace bridge."}))
         assert Path(created["path"]).exists()
-        assert (notes / "Ideas" / "INDEX.md").exists()
+        index_text = (notes / "Ideas" / "INDEX.md").read_text(encoding="utf-8")
+        assert "## この階層のノート" in index_text
+        assert "Brainlace bridge" in index_text
 
         appended = json.loads(plugin._tool_append_note({"root": str(vault), "path": "notes/Ideas/Beta.md", "heading": "追記", "body": "追加メモ"}))
         assert appended["ok"] is True
         assert "追加メモ" in Path(appended["path"]).read_text(encoding="utf-8")
 
+        patched = json.loads(plugin._tool_patch_note({"root": str(vault), "path": "Ideas/Beta.md", "old_string": "追加メモ", "new_string": "追加メモ2"}))
+        assert patched["ok"] is True
+        assert "追加メモ2" in Path(patched["path"]).read_text(encoding="utf-8")
+        assert "diff" in patched and "追加メモ2" in patched["diff"]
+
+        (notes / "Gamma.md").write_text("# Gamma\n\nSee [[Beta]].\n", encoding="utf-8")
+        moved_preview = json.loads(plugin._tool_move_note({"root": str(vault), "source_path": "Ideas/Beta.md", "category": "Archive", "title": "Beta moved", "dry_run": True}))
+        assert moved_preview["dry_run"] is True
+        assert moved_preview["updated_link_files"]
+
+        moved = json.loads(plugin._tool_move_note({"root": str(vault), "source_path": "Ideas/Beta.md", "category": "Archive", "title": "Beta moved"}))
+        assert moved["ok"] is True
+        assert (notes / "Archive" / "Beta moved.md").exists()
+        assert "[[Archive/Beta moved|Beta]]" in (notes / "Gamma.md").read_text(encoding="utf-8") or "[[Archive/Beta moved]]" in (notes / "Gamma.md").read_text(encoding="utf-8")
+
+        plan = json.loads(plugin._tool_plan_note_update({"root": str(vault), "text": "Brainlace bridge 追加メモ"}))
+        assert plan["ok"] is True
+        assert plan["recommendation"]["action"] in {"append", "create"}
+
         checked = json.loads(plugin._tool_check_links({"root": str(vault), "refresh": True}))
-        assert checked["broken_link_count"] >= 1
+        assert checked["broken_link_count"] == 1
+        assert checked["broken_links"][0]["link"] == "Missing"

@@ -13,6 +13,11 @@ LIMIT_PARAM = {
     "description": "Maximum number of rows to return.",
     "minimum": 1,
 }
+DRY_RUN_PARAM = {
+    "type": "boolean",
+    "description": "Preview the edit without writing files.",
+    "default": False,
+}
 
 BRAINLACE_STATUS = {
     "name": "brainlace_status",
@@ -25,7 +30,7 @@ BRAINLACE_STATUS = {
 
 BRAINLACE_INDEX = {
     "name": "brainlace_index",
-    "description": "Scan Markdown notes and write a Brainlace JSON index for agent-readable retrieval.",
+    "description": "Scan Markdown notes and write a richer Brainlace JSON index for agent-readable retrieval.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -39,7 +44,7 @@ BRAINLACE_INDEX = {
 
 BRAINLACE_SEARCH = {
     "name": "brainlace_search",
-    "description": "Search Brainlace Markdown notes by title, path, tags, aliases, headings, and text snippets.",
+    "description": "Search Brainlace Markdown notes by title, path, category, tags, aliases, headings, backlinks, and text snippets.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -55,7 +60,7 @@ BRAINLACE_SEARCH = {
 
 BRAINLACE_RELATED = {
     "name": "brainlace_related",
-    "description": "Find notes related to a piece of text using lightweight token overlap over the Brainlace index.",
+    "description": "Find notes related to a piece of text using weighted title/alias/tag/path/token overlap over the Brainlace index.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -71,7 +76,7 @@ BRAINLACE_RELATED = {
 
 BRAINLACE_CREATE_NOTE = {
     "name": "brainlace_create_note",
-    "description": "Create one Markdown note under the Brainlace notes root, optionally adding frontmatter and index links.",
+    "description": "Create one Markdown note under the Brainlace notes root, optionally adding frontmatter and human-readable index links.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -83,7 +88,7 @@ BRAINLACE_CREATE_NOTE = {
             "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional frontmatter tags."},
             "aliases": {"type": "array", "items": {"type": "string"}, "description": "Optional frontmatter aliases."},
             "overwrite": {"type": "boolean", "description": "Overwrite an existing note if present.", "default": False},
-            "wire_index": {"type": "boolean", "description": "Create/update category INDEX.md with a link to the note.", "default": True},
+            "wire_index": {"type": "boolean", "description": "Create/update category INDEX.md with a human-readable link row.", "default": True},
         },
         "required": ["category", "title", "body"],
     },
@@ -105,9 +110,66 @@ BRAINLACE_APPEND_NOTE = {
     },
 }
 
+BRAINLACE_PATCH_NOTE = {
+    "name": "brainlace_patch_note",
+    "description": "Patch an existing Brainlace note with old_string/new_string replacement and return a unified diff.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "path": {"type": "string", "description": "Note path relative to vault/notes root or an absolute path inside the vault."},
+            "old_string": {"type": "string", "description": "Text to find. Must be unique unless replace_all=true."},
+            "new_string": {"type": "string", "description": "Replacement text. Empty string deletes the match."},
+            "replace_all": {"type": "boolean", "description": "Replace all matches instead of requiring uniqueness.", "default": False},
+            "dry_run": DRY_RUN_PARAM,
+        },
+        "required": ["path", "old_string", "new_string"],
+    },
+}
+
+BRAINLACE_MOVE_NOTE = {
+    "name": "brainlace_move_note",
+    "description": "Move or rename a Markdown note and optionally update inbound wikilinks and category INDEX.md wiring.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "source_path": {"type": "string", "description": "Existing note path relative to vault/notes root or absolute."},
+            "path": {"type": "string", "description": "Alias for source_path."},
+            "dest_path": {"type": "string", "description": "Destination path relative to vault/notes root or absolute."},
+            "category": {"type": "string", "description": "Destination category when dest_path is omitted."},
+            "title": {"type": "string", "description": "Destination title when dest_path is omitted."},
+            "overwrite": {"type": "boolean", "description": "Overwrite destination if present.", "default": False},
+            "update_links": {"type": "boolean", "description": "Rewrite inbound wikilinks that point to the old note.", "default": True},
+            "wire_index": {"type": "boolean", "description": "Add a human-readable row to the destination category INDEX.md.", "default": True},
+            "dry_run": DRY_RUN_PARAM,
+        },
+        "required": ["source_path"],
+    },
+}
+
+BRAINLACE_PLAN_NOTE_UPDATE = {
+    "name": "brainlace_plan_note_update",
+    "description": "Plan where a new note update should land by returning likely target notes and a create/append recommendation.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "text": {"type": "string", "description": "Conversation text or note content to place."},
+            "query": {"type": "string", "description": "Alias for text."},
+            "action_hint": {"type": "string", "description": "Preferred action such as append or create."},
+            "limit": LIMIT_PARAM,
+            "refresh": {"type": "boolean", "description": "Rebuild the index before planning.", "default": False},
+        },
+    },
+}
+
 BRAINLACE_CHECK_LINKS = {
     "name": "brainlace_check_links",
-    "description": "Check indexed Markdown notes for broken wikilinks and orphan notes.",
+    "description": "Check indexed Markdown notes for broken wikilinks and orphan notes using Brainlace's path-aware resolver.",
     "parameters": {
         "type": "object",
         "properties": {
