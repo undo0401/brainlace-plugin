@@ -1,3 +1,15 @@
 __pycache__/
 *.pyc
 data/
+
+# Local cache / secret / temporary noise.
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.DS_Store
