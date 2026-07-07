@@ -74,6 +74,38 @@ BRAINLACE_RELATED = {
     },
 }
 
+BRAINLACE_CATALOG_SEARCH = {
+    "name": "brainlace_catalog_search",
+    "description": "Search Brainlace notes as catalog cards: role, freshness, source quality, read cost, and why a note is useful before reading the full body.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "query": {"type": "string", "description": "Search query."},
+            "text": {"type": "string", "description": "Alias for query."},
+            "task_type": {"type": "string", "description": "Optional task lens such as planning, implementation, design, current, or operations."},
+            "limit": LIMIT_PARAM,
+            "refresh": {"type": "boolean", "description": "Rebuild the index before searching.", "default": False},
+        },
+    },
+}
+
+BRAINLACE_DESCRIBE_NOTE = {
+    "name": "brainlace_describe_note",
+    "description": "Describe one Brainlace note as a catalog card without modifying the note: explicit frontmatter, inferred role/freshness/source quality, use cautions, headings, and link context.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "path": {"type": "string", "description": "Note path relative to vault/notes root or an absolute path inside the vault."},
+            "note": {"type": "string", "description": "Alias for path."},
+            "refresh": {"type": "boolean", "description": "Rebuild the index before describing.", "default": False},
+        },
+    },
+}
+
 BRAINLACE_CREATE_NOTE = {
     "name": "brainlace_create_note",
     "description": "Create one Markdown note under the Brainlace notes root, optionally adding frontmatter and human-readable index links.",

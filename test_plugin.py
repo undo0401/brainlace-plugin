@@ -15,6 +15,29 @@ def load_plugin():
     return module
 
 
+def test_register_exposes_catalog_tools():
+    plugin = load_plugin()
+
+    class FakeCtx:
+        def __init__(self):
+            self.tools = []
+            self.skills = []
+
+        def register_skill(self, *args):
+            self.skills.append(args)
+
+        def register_tool(self, **kwargs):
+            self.tools.append(kwargs)
+
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    names = {tool["name"] for tool in ctx.tools}
+    assert "brainlace_catalog_search" in names
+    assert "brainlace_describe_note" in names
+    assert "brainlace_search" in names
+    assert "brainlace_check_links" in names
+
+
 def test_index_search_create_append_patch_move_plan_check_links():
     plugin = load_plugin()
     with tempfile.TemporaryDirectory() as tmp:
@@ -38,6 +61,24 @@ def test_index_search_create_append_patch_move_plan_check_links():
         assert search["results"]
         assert search["results"][0]["title"] == "Alpha"
         assert "category" in search["results"][0]
+
+        describe = json.loads(plugin._tool_describe_note({"root": str(vault), "path": "Alpha.md"}))
+        assert describe["ok"] is True
+        assert describe["note"]["title"] == "Alpha"
+        assert describe["note"]["frontmatter"]["context_role"] is None
+        assert describe["catalog"]["inferred_context_role"] == "design"
+        assert describe["catalog"]["freshness_guess"] == "current"
+        assert describe["catalog"]["source_quality_guess"] == "interpretation"
+        assert "live_system_state" in describe["catalog"]["when_not_to_use"]
+        assert describe["catalog"]["confidence"] > 0
+
+        catalog = json.loads(plugin._tool_catalog_search({"root": str(vault), "query": "Brainlace design", "task_type": "planning"}))
+        assert catalog["ok"] is True
+        assert catalog["results"]
+        assert catalog["results"][0]["title"] == "Alpha"
+        assert catalog["results"][0]["catalog"]["inferred_context_role"] == "design"
+        assert catalog["results"][0]["recommended_action"] == "describe"
+        assert catalog["results"][0]["read_cost"] == "summary_only"
 
         created = json.loads(plugin._tool_create_note({"root": str(vault), "category": "Ideas", "title": "Beta", "body": "Brainlace bridge."}))
         assert Path(created["path"]).exists()

@@ -28,7 +28,7 @@ _SCHEMAS_SPEC.loader.exec_module(schemas)
 PLUGIN_NAME = "brainlace"
 DEFAULT_HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data")).expanduser()
 DEFAULT_NOTES_ROOT = os.environ.get("BRAINLACE_NOTES_ROOT", "notes")
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 WIKILINK_RE = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]+)?(?:\|([^\]]+))?\]\]")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]{2,}|[\u3040-\u30ff\u3400-\u9fff]{2,}")
@@ -178,6 +178,112 @@ def _plain_summary(body: str, limit: int = 420) -> str:
     return plain[:limit]
 
 
+def _frontmatter_value(frontmatter: dict[str, Any], key: str) -> str | None:
+    value = frontmatter.get(key)
+    if value is None or value == "":
+        return None
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if str(item).strip()) or None
+    return str(value)
+
+
+def _catalog_card(row: dict[str, Any]) -> dict[str, Any]:
+    raw_frontmatter = row.get("frontmatter")
+    frontmatter: dict[str, Any] = raw_frontmatter if isinstance(raw_frontmatter, dict) else {}
+    rel = str(row.get("rel_notes_path") or row.get("rel_path") or "")
+    category = str(row.get("category") or "")
+    haystack = "\n".join([
+        str(row.get("title") or ""),
+        rel,
+        category,
+        str(row.get("summary") or ""),
+        "\n".join(str(v) for v in row.get("tags") or []),
+        "\n".join(str(v) for v in row.get("headings") or []),
+        "\n".join(str(v) for v in row.get("links") or []),
+    ]).lower()
+    explicit_role = _frontmatter_value(frontmatter, "context_role")
+    explicit_freshness = _frontmatter_value(frontmatter, "freshness")
+    explicit_source_quality = _frontmatter_value(frontmatter, "source_quality")
+
+    inferred_role = "reference"
+    if row.get("is_index"):
+        inferred_role = "index"
+    elif row.get("is_moc"):
+        inferred_role = "map"
+    elif any(part in haystack for part in ("design", "設計", "architecture", "仕様", "brainlace", "hermes", "plugin")):
+        inferred_role = "design"
+    elif any(part in haystack for part in ("diary", "日記", "memory", "感情")):
+        inferred_role = "episodic"
+    elif category.lower() in {"lin", "chibi-lin"}:
+        inferred_role = "lore"
+    elif any(part in haystack for part in ("source:", "参照", "github", "docs", "http")):
+        inferred_role = "source"
+
+    freshness_guess = "current"
+    rel_lower = rel.lower()
+    if any(part in rel_lower for part in ("archive/", ".archive/", "legacy/")):
+        freshness_guess = "archived"
+    elif any(part in haystack for part in ("stale", "deprecated", "retired", "古い", "廃止")):
+        freshness_guess = "stale"
+
+    source_quality_guess = "interpretation"
+    if explicit_source_quality:
+        source_quality_guess = explicit_source_quality
+    elif any(part in haystack for part in ("source:", "参照 repo", "github", "docs", "https://", "http://")):
+        source_quality_guess = "source-backed"
+    elif inferred_role in {"lore", "episodic"}:
+        source_quality_guess = "personal"
+
+    when_to_use: list[str] = []
+    if inferred_role == "design":
+        when_to_use.extend(["planning", "architecture", "implementation-prep"])
+    elif inferred_role == "index":
+        when_to_use.extend(["navigation", "category-overview"])
+    elif inferred_role == "map":
+        when_to_use.extend(["concept-map", "topic-overview"])
+    elif inferred_role == "lore":
+        when_to_use.extend(["identity", "relationship-context"])
+    elif inferred_role == "episodic":
+        when_to_use.extend(["recent-context", "emotional-continuity"])
+    elif inferred_role == "source":
+        when_to_use.extend(["source-check", "research"])
+    else:
+        when_to_use.append("reference")
+
+    when_not_to_use = ["live_system_state"]
+    if freshness_guess in {"stale", "archived"}:
+        when_not_to_use.append("current_operations")
+    if source_quality_guess != "source-backed":
+        when_not_to_use.append("source-of-truth-claim")
+
+    confidence = 0.45
+    if explicit_role:
+        confidence += 0.25
+    if row.get("summary"):
+        confidence += 0.12
+    if row.get("tags"):
+        confidence += 0.08
+    if row.get("headings"):
+        confidence += 0.05
+    if inferred_role != "reference":
+        confidence += 0.1
+    confidence = min(0.95, confidence)
+
+    return {
+        "context_role": explicit_role,
+        "freshness": explicit_freshness,
+        "source_quality": explicit_source_quality,
+        "inferred_context_role": explicit_role or inferred_role,
+        "freshness_guess": explicit_freshness or freshness_guess,
+        "source_quality_guess": source_quality_guess,
+        "when_to_use": when_to_use,
+        "when_not_to_use": sorted(set(when_not_to_use)),
+        "read_cost": "summary_only" if row.get("summary") else "headings_only",
+        "recommended_action": "describe",
+        "confidence": round(confidence, 2),
+    }
+
+
 def _extract_note(path: Path, notes_root: Path, vault_root: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8", errors="replace")
     frontmatter, body = _parse_frontmatter(text)
@@ -216,6 +322,22 @@ def _extract_note(path: Path, notes_root: Path, vault_root: Path) -> dict[str, A
         "frontmatter": frontmatter,
         "frontmatter_updated": frontmatter.get("updated"),
         "frontmatter_created": frontmatter.get("created"),
+        "catalog": _catalog_card({
+            "title": title,
+            "path": str(path),
+            "rel_path": rel_vault,
+            "rel_notes_path": rel_notes,
+            "category": category,
+            "tags": tags,
+            "aliases": aliases,
+            "links": links,
+            "headings": headings,
+            "summary": _plain_summary(body),
+            "frontmatter": frontmatter,
+            "is_index": path.name == "INDEX.md",
+            "is_moc": path.name == "MOC.md",
+            "updated_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds"),
+        }),
         "is_index": path.name == "INDEX.md",
         "is_moc": path.name == "MOC.md",
         "outbound_count": len(links),
@@ -473,6 +595,99 @@ def _result_row(row: dict[str, Any], score: float, reasons: list[str] | None = N
         "updated_at": row.get("updated_at"),
         "match_reasons": reasons or [],
     }
+
+
+def _catalog_search_row(row: dict[str, Any], score: float, reasons: list[str] | None = None) -> dict[str, Any]:
+    card = dict(row.get("catalog") or _catalog_card(row))
+    item = _result_row(row, score, reasons)
+    item["catalog"] = card
+    item["read_cost"] = card.get("read_cost") or "summary_only"
+    item["recommended_action"] = card.get("recommended_action") or "describe"
+    item["confidence"] = card.get("confidence") or 0
+    return item
+
+
+def _find_index_record_for_path(payload: dict[str, Any], note_path: Path, vault: Path) -> dict[str, Any] | None:
+    rel = note_path.relative_to(vault).as_posix()
+    for row in payload.get("records") or []:
+        if isinstance(row, dict) and row.get("rel_path") == rel:
+            return row
+    return None
+
+
+def _tool_describe_note(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    vault = _resolve_vault_root(params.get("root"))
+    notes = _resolve_notes_root(vault, params.get("notes_root"))
+    note_path = _resolve_note_path(vault, notes, str(params.get("path") or params.get("note") or ""))
+    payload = _load_index(str(vault), str(notes), refresh=bool(params.get("refresh", False)))
+    row = _find_index_record_for_path(payload, note_path, vault)
+    if row is None:
+        payload = _build_index(str(vault), str(notes))
+        row = _find_index_record_for_path(payload, note_path, vault)
+    if row is None:
+        raise RuntimeError(f"note is inside vault but missing from Brainlace index: {note_path}")
+    catalog = dict(row.get("catalog") or _catalog_card(row))
+    raw_frontmatter = row.get("frontmatter")
+    frontmatter: dict[str, Any] = raw_frontmatter if isinstance(raw_frontmatter, dict) else {}
+    return _json({
+        "ok": True,
+        "index_generated_at": payload.get("generated_at"),
+        "note": {
+            "title": row.get("title"),
+            "rel_path": row.get("rel_path"),
+            "rel_notes_path": row.get("rel_notes_path"),
+            "category": row.get("category"),
+            "path": row.get("path"),
+            "summary": row.get("summary"),
+            "tags": row.get("tags") or [],
+            "aliases": row.get("aliases") or [],
+            "headings": row.get("headings") or [],
+            "frontmatter": {
+                "context_role": frontmatter.get("context_role"),
+                "freshness": frontmatter.get("freshness"),
+                "source_quality": frontmatter.get("source_quality"),
+            },
+            "inbound_count": row.get("inbound_count") or 0,
+            "outbound_count": row.get("outbound_count") or 0,
+            "updated_at": row.get("updated_at"),
+        },
+        "catalog": catalog,
+        "related": {
+            "links": (row.get("links") or [])[:20],
+            "backlinks": (row.get("backlinks") or [])[:20],
+        },
+    })
+
+
+def _tool_catalog_search(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    query = str(params.get("query") or params.get("text") or "").strip()
+    if not query:
+        raise RuntimeError("query or text is required")
+    task_type = str(params.get("task_type") or "").strip().lower()
+    limit = max(1, int(params.get("limit") or 8))
+    payload = _load_index(params.get("root"), params.get("notes_root"), refresh=bool(params.get("refresh", False)))
+    scored = []
+    for row in payload.get("records") or []:
+        if not isinstance(row, dict):
+            continue
+        score, reasons = _score_query(row, query)
+        card = row.get("catalog") or _catalog_card(row)
+        role = str(card.get("inferred_context_role") or "")
+        uses = {str(item).lower() for item in card.get("when_to_use") or []}
+        if task_type:
+            if task_type in uses or (task_type in {"planning", "implementation", "design"} and role == "design"):
+                score += 2.5
+                reasons.append(f"task:{task_type}")
+            if task_type in {"current", "operations"} and card.get("freshness_guess") in {"stale", "archived"}:
+                score -= 3.0
+                reasons.append("freshness-penalty")
+        if score > 0:
+            item = _catalog_search_row(row, score, sorted(set(reasons))[:16])
+            scored.append(item)
+    scored.sort(key=lambda item: (item["score"], item.get("confidence") or 0, item.get("inbound_count") or 0, item.get("updated_at") or ""), reverse=True)
+    return _json({"ok": True, "query": query, "task_type": task_type or None, "index_generated_at": payload.get("generated_at"), "results": scored[:limit], "total_matches": len(scored)})
 
 
 def _tool_status(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
@@ -825,7 +1040,7 @@ def _tool_check_links(params: dict[str, Any] | None = None, **_kwargs: Any) -> s
 
 
 def _register_tool(ctx, *, name: str, schema: dict[str, Any], handler: Any, description: str) -> None:
-    ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description, emoji="🧠")
+    ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description, emoji="🪢")
 
 
 def register(ctx) -> None:
@@ -837,6 +1052,8 @@ def register(ctx) -> None:
         ("brainlace_index", schemas.BRAINLACE_INDEX, _tool_index, "Build the Brainlace Markdown note index."),
         ("brainlace_search", schemas.BRAINLACE_SEARCH, _tool_search, "Search Brainlace-indexed notes."),
         ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, "Find notes related to provided text."),
+        ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, "Search Brainlace notes as role/freshness catalog cards."),
+        ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, "Describe one Brainlace note before reading or using it."),
         ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
         ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
         ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),
