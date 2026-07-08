@@ -1203,18 +1203,18 @@ def register(ctx) -> None:
     if skill_path.exists():
         ctx.register_skill("brainlace", skill_path, "Operate Brainlace, LIN's filesystem-first second-brain framework.")
     tools = [
-        ("brainlace_status", schemas.BRAINLACE_STATUS, _tool_status, "Inspect Brainlace vault/index status."),
-        ("brainlace_index", schemas.BRAINLACE_INDEX, _tool_index, "Build the Brainlace Markdown note index."),
-        ("brainlace_search", schemas.BRAINLACE_SEARCH, _tool_search, "Search Brainlace-indexed notes."),
-        ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, "Find notes related to provided text."),
-        ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, "Search Brainlace notes as role/freshness catalog cards."),
-        ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, "Describe one Brainlace note before reading or using it."),
-        ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
-        ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
-        ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),
-        ("brainlace_move_note", schemas.BRAINLACE_MOVE_NOTE, _tool_move_note, "Move or rename a Brainlace note and update inbound links."),
-        ("brainlace_plan_note_update", schemas.BRAINLACE_PLAN_NOTE_UPDATE, _tool_plan_note_update, "Plan where a note update should land."),
-        ("brainlace_check_links", schemas.BRAINLACE_CHECK_LINKS, _tool_check_links, "Check broken wikilinks and orphan notes."),
+        ("brainlace_status", schemas.BRAINLACE_STATUS, _tool_status, 'Inspect Brainlace.'),
+        ("brainlace_index", schemas.BRAINLACE_INDEX, _tool_index, 'Index notes.'),
+        ("brainlace_search", schemas.BRAINLACE_SEARCH, _tool_search, 'Search notes.'),
+        ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, 'Find related notes.'),
+        ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, 'Search note catalog.'),
+        ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, 'Describe Note.'),
+        ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, 'Create Note.'),
+        ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, 'Append Note.'),
+        ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, 'Patch Note.'),
+        ("brainlace_move_note", schemas.BRAINLACE_MOVE_NOTE, _tool_move_note, 'Move Note.'),
+        ("brainlace_plan_note_update", schemas.BRAINLACE_PLAN_NOTE_UPDATE, _tool_plan_note_update, 'Plan note update.'),
+        ("brainlace_check_links", schemas.BRAINLACE_CHECK_LINKS, _tool_check_links, 'Check Links.'),
     ]
     for name, schema, handler, description in tools:
         _register_tool(ctx, name=name, schema=schema, handler=handler, description=description)
