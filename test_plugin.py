@@ -34,8 +34,8 @@ def test_register_exposes_catalog_tools():
     names = {tool["name"] for tool in ctx.tools}
     assert "brainlace_catalog_search" in names
     assert "brainlace_describe_note" in names
-    assert "brainlace_active_memory_preview" in names
-    assert "brainlace_active_memory_context" in names
+    assert "brainlace_active_memory_preview" not in names
+    assert "brainlace_active_memory_context" not in names
     assert "brainlace_search" in names
     assert "brainlace_check_links" in names
 

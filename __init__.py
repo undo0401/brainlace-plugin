@@ -1209,8 +1209,6 @@ def register(ctx) -> None:
         ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, "Find notes related to provided text."),
         ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, "Search Brainlace notes as role/freshness catalog cards."),
         ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, "Describe one Brainlace note before reading or using it."),
-        ("brainlace_active_memory_preview", schemas.BRAINLACE_ACTIVE_MEMORY_PREVIEW, _tool_active_memory_preview, "Preview soft active-memory note context without modifying memory or notes."),
-        ("brainlace_active_memory_context", schemas.BRAINLACE_ACTIVE_MEMORY_CONTEXT, _tool_active_memory_context, "Return soft active-memory context text for a prompt layer to optionally inject."),
         ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
         ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
         ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),
