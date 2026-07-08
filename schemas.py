@@ -126,6 +126,12 @@ BRAINLACE_ACTIVE_MEMORY_PREVIEW = {
     },
 }
 
+BRAINLACE_ACTIVE_MEMORY_CONTEXT = {
+    "name": "brainlace_active_memory_context",
+    "description": "Return a compact Brainlace active-memory context packet for a prompt/memory layer to optionally inject. Brainlace only retrieves and formats; it does not modify memory or prompts.",
+    "parameters": BRAINLACE_ACTIVE_MEMORY_PREVIEW["parameters"],
+}
+
 BRAINLACE_CREATE_NOTE = {
     "name": "brainlace_create_note",
     "description": "Create one Markdown note under the Brainlace notes root, optionally adding frontmatter and human-readable index links.",

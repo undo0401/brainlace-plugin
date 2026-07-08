@@ -821,6 +821,30 @@ def _tool_active_memory_preview(params: dict[str, Any] | None = None, **_kwargs:
     })
 
 
+def _tool_active_memory_context(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    preview = json.loads(_tool_active_memory_preview(params or {}))
+    inject_text = str(preview.get("suggested_injection") or "") if preview.get("injectable") else ""
+    debug = dict(preview.get("debug") or {})
+    debug["source_tool"] = "brainlace_active_memory_preview"
+    debug["memory_side_effects"] = False
+    debug["note_side_effects"] = False
+    return _json({
+        "ok": True,
+        "mode": "context",
+        "injectable": bool(preview.get("injectable")),
+        "reason": preview.get("reason"),
+        "query": preview.get("query"),
+        "task_type": preview.get("task_type"),
+        "session_type": preview.get("session_type"),
+        "index_generated_at": preview.get("index_generated_at"),
+        "cards": preview.get("selected") or [],
+        "skipped": preview.get("skipped") or [],
+        "inject_text": inject_text,
+        "suggested_injection": inject_text,
+        "debug": debug,
+    })
+
+
 def _tool_status(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
     params = params or {}
     vault = _resolve_vault_root(params.get("root"))
@@ -1186,6 +1210,7 @@ def register(ctx) -> None:
         ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, "Search Brainlace notes as role/freshness catalog cards."),
         ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, "Describe one Brainlace note before reading or using it."),
         ("brainlace_active_memory_preview", schemas.BRAINLACE_ACTIVE_MEMORY_PREVIEW, _tool_active_memory_preview, "Preview soft active-memory note context without modifying memory or notes."),
+        ("brainlace_active_memory_context", schemas.BRAINLACE_ACTIVE_MEMORY_CONTEXT, _tool_active_memory_context, "Return soft active-memory context text for a prompt layer to optionally inject."),
         ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
         ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
         ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),

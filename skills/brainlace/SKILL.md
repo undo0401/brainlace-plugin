@@ -23,13 +23,14 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 4. Use `brainlace_catalog_search` when deciding which notes are safe/useful before reading full bodies; it returns role, freshness, source-quality, read-cost, and cautions as Brainlace-owned catalog metadata.
 5. Use `brainlace_describe_note` on a candidate before treating it as context, especially when the note may be design/history/lore rather than current source of truth.
 6. Use `brainlace_active_memory_preview` to inspect which catalog cards would be safe soft context before any memory/prompt layer injects them. This tool previews only; it does not modify notes, memory, or prompts.
-7. Use `brainlace_related` when the user gives a loose idea and LIN needs likely context.
-8. Use `brainlace_plan_note_update` when deciding whether a thought belongs in an existing note or a new note.
-9. Use `brainlace_create_note` for new durable notes; keep `wire_index=true` unless intentionally creating an unlinked scratch note.
-10. Use `brainlace_append_note` for small additions to existing notes.
-11. Use `brainlace_patch_note` for targeted replacements and link repairs; inspect the returned diff.
-12. Use `brainlace_move_note` for note moves/renames so inbound wikilinks and destination `INDEX.md` wiring can be handled together.
-13. Use `brainlace_check_links` after structural changes or when notes feel messy.
+7. Use `brainlace_active_memory_context` when a separate memory/prompt layer needs a compact `inject_text` packet. Brainlace still only retrieves and formats; it never writes to memory or injects prompts by itself.
+8. Use `brainlace_related` when the user gives a loose idea and LIN needs likely context.
+9. Use `brainlace_plan_note_update` when deciding whether a thought belongs in an existing note or a new note.
+10. Use `brainlace_create_note` for new durable notes; keep `wire_index=true` unless intentionally creating an unlinked scratch note.
+11. Use `brainlace_append_note` for small additions to existing notes.
+12. Use `brainlace_patch_note` for targeted replacements and link repairs; inspect the returned diff.
+13. Use `brainlace_move_note` for note moves/renames so inbound wikilinks and destination `INDEX.md` wiring can be handled together.
+14. Use `brainlace_check_links` after structural changes or when notes feel messy.
 
 ## Link / index expectations
 
@@ -37,7 +38,7 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 - Archive/design/workspace files can satisfy links even when Archive is excluded from normal source indexing.
 - Index rows carry category, heading, frontmatter, inbound/outbound counts, backlinks, index/MOC flags, summaries, update timestamps, and Brainlace-owned catalog cards.
 - Catalog cards may infer role/freshness/source quality, but those machine hints should not be written back into Markdown unless the user explicitly chooses to promote them to human-readable frontmatter.
-- Active-memory preview belongs to Brainlace because it is second-brain retrieval. Prompt injection belongs to a separate memory/prompt layer that may call the Brainlace tool, not import Brainlace internals.
+- Active-memory preview/context belongs to Brainlace because it is second-brain retrieval and context-packet formatting. Prompt injection belongs to a separate memory/prompt layer that may call the public Brainlace tool, not import Brainlace internals.
 - Category `INDEX.md` wiring should remain human-readable, using `## この階層のノート` and short summaries rather than a bare link dump when Brainlace creates the entry.
 
 ## Boundaries

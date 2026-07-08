@@ -19,6 +19,7 @@ Humans can keep editing Markdown notes in Obsidian or any future editor. Brainla
 - `brainlace_catalog_search`
 - `brainlace_describe_note`
 - `brainlace_active_memory_preview`
+- `brainlace_active_memory_context`
 - `brainlace_create_note`
 - `brainlace_append_note`
 - `brainlace_patch_note`
@@ -33,6 +34,7 @@ Humans can keep editing Markdown notes in Obsidian or any future editor. Brainla
 - Index records include category, headings, frontmatter, inbound/outbound counts, backlinks, index/MOC flags, summaries, and catalog cards.
 - `brainlace_catalog_search` and `brainlace_describe_note` expose role/freshness/source-quality inference without writing those machine hints back into Markdown notes.
 - `brainlace_active_memory_preview` selects soft active-memory candidates from Brainlace catalog cards and returns selected/skipped/debug data without modifying notes, memory, or prompts.
+- `brainlace_active_memory_context` wraps the same selection as a compact `inject_text` packet for a separate memory/prompt layer to consume later; Brainlace still performs no injection itself.
 - Search and related retrieval weight title, aliases, tags, category/path, phrase matches, token overlap, and backlinks.
 - Note creation and moves wire category `INDEX.md` pages with a human-readable `## この階層のノート` section.
 - Patch/move tools return diffs or impacted link files, so LIN can repair notes without falling back to raw filesystem edits for ordinary note work.
