@@ -690,6 +690,137 @@ def _tool_catalog_search(params: dict[str, Any] | None = None, **_kwargs: Any) -
     return _json({"ok": True, "query": query, "task_type": task_type or None, "index_generated_at": payload.get("generated_at"), "results": scored[:limit], "total_matches": len(scored)})
 
 
+ACTIVE_MEMORY_BLOCKED_SESSION_TYPES = {"heartbeat", "cron", "report", "subagent", "background", "detached"}
+
+
+def _active_memory_candidate_card(item: dict[str, Any]) -> dict[str, Any]:
+    catalog = dict(item.get("catalog") or {})
+    return {
+        "title": item.get("title"),
+        "rel_path": item.get("rel_path"),
+        "rel_notes_path": item.get("rel_notes_path"),
+        "summary": item.get("summary"),
+        "score": item.get("score"),
+        "match_reasons": item.get("match_reasons") or [],
+        "catalog": {
+            "inferred_context_role": catalog.get("inferred_context_role"),
+            "freshness_guess": catalog.get("freshness_guess"),
+            "source_quality_guess": catalog.get("source_quality_guess"),
+            "when_to_use": catalog.get("when_to_use") or [],
+            "when_not_to_use": catalog.get("when_not_to_use") or [],
+            "read_cost": catalog.get("read_cost"),
+            "confidence": catalog.get("confidence"),
+        },
+    }
+
+
+def _active_memory_skip_reason(item: dict[str, Any], min_confidence: float) -> str | None:
+    catalog = item.get("catalog") or {}
+    if (catalog.get("freshness_guess") or "") in {"stale", "archived"}:
+        return "freshness_block"
+    if float(catalog.get("confidence") or 0) < min_confidence:
+        return "confidence_below_minimum"
+    if "live_system_state" in set(catalog.get("when_not_to_use") or []) and any(reason in {"current", "operations"} for reason in item.get("match_reasons") or []):
+        return "live_state_caution"
+    return None
+
+
+def _active_memory_injection(cards: list[dict[str, Any]]) -> str:
+    if not cards:
+        return ""
+    lines = ["[Brainlace active memory]", "Use as soft context, not source of truth."]
+    for card in cards:
+        catalog = card.get("catalog") or {}
+        cautions = ", ".join(str(item) for item in catalog.get("when_not_to_use") or [])
+        why = ", ".join(str(item) for item in card.get("match_reasons") or [])
+        lines.append(f"- {card.get('title')} ({card.get('rel_notes_path')})")
+        lines.append(f"  role={catalog.get('inferred_context_role')} freshness={catalog.get('freshness_guess')} source={catalog.get('source_quality_guess')}")
+        if why:
+            lines.append(f"  why={why}")
+        if cautions:
+            lines.append(f"  caution={cautions}")
+        summary = str(card.get("summary") or "").strip()
+        if summary:
+            lines.append(f"  summary={summary[:220]}")
+    lines.append("[/Brainlace active memory]")
+    return "\n".join(lines)
+
+
+def _tool_active_memory_preview(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
+    params = params or {}
+    text = str(params.get("text") or params.get("query") or "").strip()
+    if not text:
+        raise RuntimeError("text or query is required")
+    session_type = str(params.get("session_type") or "conversation").strip().lower()
+    if session_type in ACTIVE_MEMORY_BLOCKED_SESSION_TYPES:
+        return _json({
+            "ok": True,
+            "mode": "preview",
+            "injectable": False,
+            "reason": "session_type_blocked",
+            "session_type": session_type,
+            "selected": [],
+            "skipped": [],
+            "suggested_injection": "",
+        })
+    limit = max(1, int(params.get("limit") or params.get("max_notes") or 2))
+    candidate_limit = max(limit, int(params.get("candidate_limit") or max(10, limit * 4)))
+    min_confidence = float(params.get("min_confidence") or 0.65)
+    catalog_payload = json.loads(_tool_catalog_search({
+        "root": params.get("root"),
+        "notes_root": params.get("notes_root"),
+        "query": text,
+        "task_type": params.get("task_type") or "conversation",
+        "limit": candidate_limit,
+        "refresh": bool(params.get("refresh", False)),
+    }))
+    selected: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for item in catalog_payload.get("results") or []:
+        reason = _active_memory_skip_reason(item, min_confidence)
+        card = _active_memory_candidate_card(item)
+        if reason:
+            skipped.append({
+                "title": item.get("title"),
+                "rel_notes_path": item.get("rel_notes_path"),
+                "reason": reason,
+                "catalog": card.get("catalog"),
+                "score": item.get("score"),
+            })
+            continue
+        if len(selected) < limit:
+            selected.append(card)
+        else:
+            skipped.append({
+                "title": item.get("title"),
+                "rel_notes_path": item.get("rel_notes_path"),
+                "reason": "over_limit",
+                "catalog": card.get("catalog"),
+                "score": item.get("score"),
+            })
+    return _json({
+        "ok": True,
+        "mode": "preview",
+        "injectable": bool(selected),
+        "reason": "selected" if selected else "no_candidates_selected",
+        "query": text,
+        "task_type": params.get("task_type") or "conversation",
+        "session_type": session_type,
+        "min_confidence": min_confidence,
+        "index_generated_at": catalog_payload.get("index_generated_at"),
+        "selected": selected,
+        "skipped": skipped,
+        "suggested_injection": _active_memory_injection(selected),
+        "debug": {
+            "candidate_count": len(catalog_payload.get("results") or []),
+            "selected_count": len(selected),
+            "skipped_count": len(skipped),
+            "memory_side_effects": False,
+            "note_side_effects": False,
+        },
+    })
+
+
 def _tool_status(params: dict[str, Any] | None = None, **_kwargs: Any) -> str:
     params = params or {}
     vault = _resolve_vault_root(params.get("root"))
@@ -1054,6 +1185,7 @@ def register(ctx) -> None:
         ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, "Find notes related to provided text."),
         ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, "Search Brainlace notes as role/freshness catalog cards."),
         ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, "Describe one Brainlace note before reading or using it."),
+        ("brainlace_active_memory_preview", schemas.BRAINLACE_ACTIVE_MEMORY_PREVIEW, _tool_active_memory_preview, "Preview soft active-memory note context without modifying memory or notes."),
         ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, "Create a Markdown note and wire category index."),
         ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, "Append Markdown to an existing Brainlace note."),
         ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, "Patch an existing Brainlace note with a diff."),

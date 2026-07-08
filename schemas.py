@@ -106,6 +106,26 @@ BRAINLACE_DESCRIBE_NOTE = {
     },
 }
 
+BRAINLACE_ACTIVE_MEMORY_PREVIEW = {
+    "name": "brainlace_active_memory_preview",
+    "description": "Preview which Brainlace catalog cards would be safe and useful as soft active-memory context before a reply. Does not modify notes or prompt state.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "root": ROOT_PARAM,
+            "notes_root": NOTES_ROOT_PARAM,
+            "text": {"type": "string", "description": "Latest user message or conversation text to recall notes for."},
+            "query": {"type": "string", "description": "Alias for text."},
+            "task_type": {"type": "string", "description": "Optional task lens such as planning, implementation, design, current, consultation, or conversation."},
+            "session_type": {"type": "string", "description": "Session lane. heartbeat/cron/subagent/background are blocked by default."},
+            "limit": LIMIT_PARAM,
+            "candidate_limit": LIMIT_PARAM,
+            "min_confidence": {"type": "number", "description": "Minimum catalog confidence for selected cards.", "default": 0.65},
+            "refresh": {"type": "boolean", "description": "Rebuild the index before previewing.", "default": False},
+        },
+    },
+}
+
 BRAINLACE_CREATE_NOTE = {
     "name": "brainlace_create_note",
     "description": "Create one Markdown note under the Brainlace notes root, optionally adding frontmatter and human-readable index links.",

@@ -34,6 +34,7 @@ def test_register_exposes_catalog_tools():
     names = {tool["name"] for tool in ctx.tools}
     assert "brainlace_catalog_search" in names
     assert "brainlace_describe_note" in names
+    assert "brainlace_active_memory_preview" in names
     assert "brainlace_search" in names
     assert "brainlace_check_links" in names
 
@@ -79,6 +80,22 @@ def test_index_search_create_append_patch_move_plan_check_links():
         assert catalog["results"][0]["catalog"]["inferred_context_role"] == "design"
         assert catalog["results"][0]["recommended_action"] == "describe"
         assert catalog["results"][0]["read_cost"] == "summary_only"
+
+        (notes / "Old.md").write_text("# Old\n\nDeprecated stale Brainlace design note.\n", encoding="utf-8")
+        preview = json.loads(plugin._tool_active_memory_preview({"root": str(vault), "text": "Brainlace design", "task_type": "planning", "limit": 3, "min_confidence": 0.6, "refresh": True}))
+        assert preview["ok"] is True
+        assert preview["mode"] == "preview"
+        assert preview["injectable"] is True
+        assert preview["selected"]
+        assert preview["selected"][0]["title"] == "Alpha"
+        assert preview["selected"][0]["catalog"]["inferred_context_role"] == "design"
+        assert "Brainlace active memory" in preview["suggested_injection"]
+        assert any(item["title"] == "Old" and item["reason"] == "freshness_block" for item in preview["skipped"])
+
+        heartbeat_preview = json.loads(plugin._tool_active_memory_preview({"root": str(vault), "text": "Brainlace design", "session_type": "heartbeat"}))
+        assert heartbeat_preview["ok"] is True
+        assert heartbeat_preview["injectable"] is False
+        assert heartbeat_preview["reason"] == "session_type_blocked"
 
         created = json.loads(plugin._tool_create_note({"root": str(vault), "category": "Ideas", "title": "Beta", "body": "Brainlace bridge."}))
         assert Path(created["path"]).exists()
