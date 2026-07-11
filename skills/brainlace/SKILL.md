@@ -22,10 +22,8 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 3. Use `brainlace_read(view="search")` for direct keyword/title/tag/category lookup.
 4. Use `brainlace_read(view="catalog_search")` when deciding which notes are safe/useful before reading full bodies; it returns role, freshness, source-quality, read-cost, and cautions as Brainlace-owned catalog metadata.
 5. Use `brainlace_read(view="describe_note")` on a candidate before treating it as context, especially when the note may be design/history/lore rather than current source of truth.
-6. Use `brainlace_read(view="active_memory_preview")` to inspect which catalog cards would be safe soft context before any memory/prompt layer injects them. This view previews only; it does not modify notes, memory, or prompts.
-7. Use `brainlace_read(view="active_memory_context")` when a separate memory/prompt layer needs a compact `inject_text` packet. Brainlace still only retrieves and formats; it never writes to memory or injects prompts by itself.
-8. Use `brainlace_read(view="related")` when the user gives a loose idea and LIN needs likely context.
-9. Use `brainlace_read(view="plan_note_update")` when deciding whether a thought belongs in an existing note or a new note.
+6. Use `brainlace_read(view="related")` when the user gives a loose idea and LIN needs likely context.
+7. Use `brainlace_read(view="plan_note_update")` when deciding whether a thought belongs in an existing note or a new note.
 10. Use `brainlace_write(action="create_note")` for new durable notes; keep `wire_index=true` unless intentionally creating an unlinked scratch note.
 11. Use `brainlace_write(action="append_note")` for small additions to existing notes.
 12. Use `brainlace_write(action="patch_note")` for targeted replacements and link repairs; inspect the returned diff.

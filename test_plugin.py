@@ -77,38 +77,6 @@ def test_index_search_create_append_patch_move_plan_check_links():
         assert catalog["results"][0]["recommended_action"] == "describe"
         assert catalog["results"][0]["read_cost"] == "summary_only"
 
-        (notes / "Old.md").write_text("# Old\n\nDeprecated stale Brainlace design note.\n", encoding="utf-8")
-        preview = json.loads(plugin._tool_active_memory_preview({"root": str(vault), "text": "Brainlace design", "task_type": "planning", "limit": 3, "min_confidence": 0.6, "refresh": True}))
-        assert preview["ok"] is True
-        assert preview["mode"] == "preview"
-        assert preview["injectable"] is True
-        assert preview["selected"]
-        assert preview["selected"][0]["title"] == "Alpha"
-        assert preview["selected"][0]["catalog"]["inferred_context_role"] == "design"
-        assert "Brainlace active memory" in preview["suggested_injection"]
-        assert any(item["title"] == "Old" and item["reason"] == "freshness_block" for item in preview["skipped"])
-
-        heartbeat_preview = json.loads(plugin._tool_active_memory_preview({"root": str(vault), "text": "Brainlace design", "session_type": "heartbeat"}))
-        assert heartbeat_preview["ok"] is True
-        assert heartbeat_preview["injectable"] is False
-        assert heartbeat_preview["reason"] == "session_type_blocked"
-
-        context = json.loads(plugin._tool_active_memory_context({"root": str(vault), "text": "Brainlace design", "task_type": "planning", "limit": 2, "min_confidence": 0.6}))
-        assert context["ok"] is True
-        assert context["mode"] == "context"
-        assert context["injectable"] is True
-        assert context["inject_text"] == context["suggested_injection"]
-        assert context["cards"][0]["title"] == "Alpha"
-        assert context["debug"]["source_tool"] == "brainlace_active_memory_preview"
-        assert context["debug"]["memory_side_effects"] is False
-        assert context["debug"]["note_side_effects"] is False
-
-        heartbeat_context = json.loads(plugin._tool_active_memory_context({"root": str(vault), "text": "Brainlace design", "session_type": "heartbeat"}))
-        assert heartbeat_context["ok"] is True
-        assert heartbeat_context["injectable"] is False
-        assert heartbeat_context["inject_text"] == ""
-        assert heartbeat_context["reason"] == "session_type_blocked"
-
         created = json.loads(plugin._tool_create_note({"root": str(vault), "category": "Ideas", "title": "Beta", "body": "Brainlace bridge."}))
         assert Path(created["path"]).exists()
         index_text = (notes / "Ideas" / "INDEX.md").read_text(encoding="utf-8")

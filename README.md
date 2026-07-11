@@ -14,7 +14,7 @@ Humans can keep editing Markdown notes in Obsidian or any future editor. Brainla
 
 Brainlace exposes grouped router tools instead of many one-action tools:
 
-- `brainlace_read(view="status|search|related|catalog_search|describe_note|plan_note_update|check_links|active_memory_preview|active_memory_context")`
+- `brainlace_read(view="status|search|related|catalog_search|describe_note|plan_note_update|check_links")`
 - `brainlace_control(action="index")`
 - `brainlace_write(action="create_note|append_note|patch_note|move_note")`
 
@@ -24,8 +24,7 @@ Brainlace exposes grouped router tools instead of many one-action tools:
 - Archive/design/workspace targets can satisfy links without making Archive a normal source scan target.
 - Index records include category, headings, frontmatter, inbound/outbound counts, backlinks, index/MOC flags, summaries, and catalog cards.
 - `brainlace_catalog_search` and `brainlace_describe_note` expose role/freshness/source-quality inference without writing those machine hints back into Markdown notes.
-- `brainlace_active_memory_preview` selects soft active-memory candidates from Brainlace catalog cards and returns selected/skipped/debug data without modifying notes, memory, or prompts.
-- `brainlace_active_memory_context` wraps the same selection as a compact `inject_text` packet for a separate memory/prompt layer to consume later; Brainlace still performs no injection itself.
+
 - Search and related retrieval weight title, aliases, tags, category/path, phrase matches, token overlap, and backlinks.
 - Note creation and moves wire category `INDEX.md` pages with a human-readable `## この階層のノート` section.
 - Patch/move tools return diffs or impacted link files, so LIN can repair notes without falling back to raw filesystem edits for ordinary note work.
