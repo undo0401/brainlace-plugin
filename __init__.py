@@ -1251,9 +1251,9 @@ def register(ctx) -> None:
     if skill_path.exists():
         ctx.register_skill("brainlace", skill_path, "Operate Brainlace, LIN's filesystem-first second-brain framework.")
     tools = [
-        ("brainlace_read", schemas.BRAINLACE_READ, _tool_read, "Read/search Brainlace notes and catalog metadata."),
-        ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Operate Brainlace maintenance/control actions such as indexing."),
-        ("brainlace_write", schemas.BRAINLACE_WRITE, _tool_write, "Create, append, patch, or move Brainlace Markdown notes."),
+        ("brainlace_read", schemas.BRAINLACE_READ, _tool_read, "Read notes and catalog data."),
+        ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Run maintenance actions such as indexing."),
+        ("brainlace_write", schemas.BRAINLACE_WRITE, _tool_write, "Create, append, patch, or move notes."),
     ]
     for name, schema, handler, description in tools:
         _register_tool(ctx, name=name, schema=schema, handler=handler, description=description)

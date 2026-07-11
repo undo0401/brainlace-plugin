@@ -3,7 +3,7 @@
 ROOT_PARAM = {"type": "string", "description": "Vault root path."}
 NOTES_ROOT_PARAM = {"type": "string", "description": "Notes root relative to the vault root."}
 LIMIT_PARAM = {"type": "integer", "description": "Max rows.", "minimum": 1}
-REFRESH_PARAM = {"type": "boolean", "description": "Rebuild the index before reading.", "default": False}
+REFRESH_PARAM = {"type": "boolean", "description": "Reindex before reading.", "default": False}
 DRY_RUN_PARAM = {"type": "boolean", "description": "Preview only.", "default": False}
 
 COMMON_READ_PROPS = {
@@ -15,7 +15,7 @@ COMMON_READ_PROPS = {
 
 BRAINLACE_READ = {
     "name": "brainlace_read",
-    "description": "Read/search Brainlace notes and catalog metadata.",
+    "description": "Read notes and catalog data.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -36,58 +36,58 @@ BRAINLACE_READ = {
                 "description": "Read action/view.",
                 "default": "status",
             },
-            "query": {"type": "string", "description": "Search/planning query or alias for text/path."},
-            "text": {"type": "string", "description": "Text to match or plan from."},
-            "task_type": {"type": "string", "description": "Task lens such as planning or implementation."},
-            "session_type": {"type": "string", "description": "Session lane such as heartbeat/cron/subagent."},
+            "query": {"type": "string", "description": "Query or text/path alias."},
+            "text": {"type": "string", "description": "Match/planning text."},
+            "task_type": {"type": "string", "description": "Task lens."},
+            "session_type": {"type": "string", "description": "Session lane."},
             "candidate_limit": LIMIT_PARAM,
-            "min_confidence": {"type": "number", "description": "Minimum catalog confidence for selected active-memory cards.", "default": 0.65},
+            "min_confidence": {"type": "number", "description": "Minimum card confidence.", "default": 0.65},
             "path": {"type": "string", "description": "Note path."},
             "note": {"type": "string", "description": "Alias for path."},
-            "action_hint": {"type": "string", "description": "Preferred note update action such as append or create."},
+            "action_hint": {"type": "string", "description": "Preferred update action."},
         },
     },
 }
 
 BRAINLACE_CONTROL = {
     "name": "brainlace_control",
-    "description": "Operate Brainlace maintenance/control actions such as indexing.",
+    "description": "Run maintenance actions such as indexing.",
     "parameters": {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["index"], "description": "Control action.", "default": "index"},
             "root": ROOT_PARAM,
             "notes_root": NOTES_ROOT_PARAM,
-            "include_archives": {"type": "boolean", "description": "Include Archive/.archive folders when indexing.", "default": False},
-            "max_notes": {"type": "integer", "description": "Safety cap for indexed Markdown notes.", "minimum": 1},
+            "include_archives": {"type": "boolean", "description": "Index archive folders.", "default": False},
+            "max_notes": {"type": "integer", "description": "Indexed note safety cap.", "minimum": 1},
         },
     },
 }
 
 BRAINLACE_WRITE = {
     "name": "brainlace_write",
-    "description": "Create, append, patch, or move Brainlace Markdown notes.",
+    "description": "Create, append, patch, or move notes.",
     "parameters": {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["create_note", "append_note", "patch_note", "move_note"], "description": "Write action."},
             "root": ROOT_PARAM,
             "notes_root": NOTES_ROOT_PARAM,
-            "category": {"type": "string", "description": "Folder/category under notes root."},
+            "category": {"type": "string", "description": "Note category."},
             "title": {"type": "string", "description": "Note title."},
-            "body": {"type": "string", "description": "Markdown body or text to append."},
+            "body": {"type": "string", "description": "Markdown body/append text."},
             "tags": {"type": "array", "items": {"type": "string"}, "description": "Frontmatter tags."},
             "aliases": {"type": "array", "items": {"type": "string"}, "description": "Frontmatter aliases."},
-            "overwrite": {"type": "boolean", "description": "Overwrite an existing note/destination if present.", "default": False},
-            "wire_index": {"type": "boolean", "description": "Create/update category INDEX.md wiring.", "default": True},
-            "path": {"type": "string", "description": "Note path; also alias for source_path on move."},
-            "heading": {"type": "string", "description": "Heading to create before appended text."},
+            "overwrite": {"type": "boolean", "description": "Overwrite existing target.", "default": False},
+            "wire_index": {"type": "boolean", "description": "Update category INDEX.md.", "default": True},
+            "path": {"type": "string", "description": "Note/source path."},
+            "heading": {"type": "string", "description": "Append heading."},
             "old_string": {"type": "string", "description": "Text to find. Must be unique unless replace_all=true."},
             "new_string": {"type": "string", "description": "Replacement text. Empty string deletes."},
-            "replace_all": {"type": "boolean", "description": "Replace all matches instead of requiring uniqueness.", "default": False},
+            "replace_all": {"type": "boolean", "description": "Replace all matches.", "default": False},
             "source_path": {"type": "string", "description": "Move source note path."},
             "dest_path": {"type": "string", "description": "Move destination path."},
-            "update_links": {"type": "boolean", "description": "Rewrite inbound wikilinks that point to the moved note.", "default": True},
+            "update_links": {"type": "boolean", "description": "Rewrite inbound wikilinks.", "default": True},
             "dry_run": DRY_RUN_PARAM,
         },
         "required": ["action"],
