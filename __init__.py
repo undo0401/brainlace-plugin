@@ -1194,6 +1194,54 @@ def _tool_check_links(params: dict[str, Any] | None = None, **_kwargs: Any) -> s
     })
 
 
+def _tool_read(params: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    params = params or {}
+    view = str(params.get("view") or "status").strip().lower()
+    if view == "status":
+        return _tool_status(params, **kwargs)
+    if view == "search":
+        return _tool_search(params, **kwargs)
+    if view == "related":
+        if not params.get("text") and params.get("query"):
+            params = {**params, "text": params.get("query")}
+        return _tool_related(params, **kwargs)
+    if view == "catalog_search":
+        return _tool_catalog_search(params, **kwargs)
+    if view == "describe_note":
+        return _tool_describe_note(params, **kwargs)
+    if view == "plan_note_update":
+        return _tool_plan_note_update(params, **kwargs)
+    if view == "check_links":
+        return _tool_check_links(params, **kwargs)
+    if view == "active_memory_preview":
+        return _tool_active_memory_preview(params, **kwargs)
+    if view == "active_memory_context":
+        return _tool_active_memory_context(params, **kwargs)
+    raise RuntimeError(f"unknown Brainlace read view: {view}")
+
+
+def _tool_control(params: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    params = params or {}
+    action = str(params.get("action") or "index").strip().lower()
+    if action == "index":
+        return _tool_index(params, **kwargs)
+    raise RuntimeError(f"unknown Brainlace control action: {action}")
+
+
+def _tool_write(params: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    params = params or {}
+    action = str(params.get("action") or "").strip().lower()
+    if action == "create_note":
+        return _tool_create_note(params, **kwargs)
+    if action == "append_note":
+        return _tool_append_note(params, **kwargs)
+    if action == "patch_note":
+        return _tool_patch_note(params, **kwargs)
+    if action == "move_note":
+        return _tool_move_note(params, **kwargs)
+    raise RuntimeError(f"unknown Brainlace write action: {action}")
+
+
 def _register_tool(ctx, *, name: str, schema: dict[str, Any], handler: Any, description: str) -> None:
     ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description, emoji="🪢")
 
@@ -1203,18 +1251,9 @@ def register(ctx) -> None:
     if skill_path.exists():
         ctx.register_skill("brainlace", skill_path, "Operate Brainlace, LIN's filesystem-first second-brain framework.")
     tools = [
-        ("brainlace_status", schemas.BRAINLACE_STATUS, _tool_status, 'Inspect Brainlace.'),
-        ("brainlace_index", schemas.BRAINLACE_INDEX, _tool_index, 'Index notes.'),
-        ("brainlace_search", schemas.BRAINLACE_SEARCH, _tool_search, 'Search notes.'),
-        ("brainlace_related", schemas.BRAINLACE_RELATED, _tool_related, 'Find related notes.'),
-        ("brainlace_catalog_search", schemas.BRAINLACE_CATALOG_SEARCH, _tool_catalog_search, 'Search note catalog.'),
-        ("brainlace_describe_note", schemas.BRAINLACE_DESCRIBE_NOTE, _tool_describe_note, 'Describe Note.'),
-        ("brainlace_create_note", schemas.BRAINLACE_CREATE_NOTE, _tool_create_note, 'Create Note.'),
-        ("brainlace_append_note", schemas.BRAINLACE_APPEND_NOTE, _tool_append_note, 'Append Note.'),
-        ("brainlace_patch_note", schemas.BRAINLACE_PATCH_NOTE, _tool_patch_note, 'Patch Note.'),
-        ("brainlace_move_note", schemas.BRAINLACE_MOVE_NOTE, _tool_move_note, 'Move Note.'),
-        ("brainlace_plan_note_update", schemas.BRAINLACE_PLAN_NOTE_UPDATE, _tool_plan_note_update, 'Plan note update.'),
-        ("brainlace_check_links", schemas.BRAINLACE_CHECK_LINKS, _tool_check_links, 'Check Links.'),
+        ("brainlace_read", schemas.BRAINLACE_READ, _tool_read, "Read/search Brainlace notes and catalog metadata."),
+        ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Operate Brainlace maintenance/control actions such as indexing."),
+        ("brainlace_write", schemas.BRAINLACE_WRITE, _tool_write, "Create, append, patch, or move Brainlace Markdown notes."),
     ]
     for name, schema, handler, description in tools:
         _register_tool(ctx, name=name, schema=schema, handler=handler, description=description)
