@@ -1085,19 +1085,7 @@ def _tool_write(params: dict[str, Any] | None = None, **kwargs: Any) -> str:
     raise RuntimeError(f"unknown Brainlace write action: {action}")
 
 
-def _compact_control_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Keep router parameter names/types while moving operational prose to its skill."""
-    parameters = dict(schema.get("parameters") or {})
-    parameters["properties"] = {
-        key: {field: value for field, value in spec.items() if field != "description"}
-        for key, spec in (parameters.get("properties") or {}).items()
-    }
-    return {**schema, "parameters": parameters}
-
-
 def _register_tool(ctx, *, name: str, schema: dict[str, Any], handler: Any, description: str) -> None:
-    if name.endswith("_control"):
-        schema = _compact_control_schema(schema)
     ctx.register_tool(name=name, toolset="brainlace", schema=schema, handler=handler, description=description, emoji="🪢")
 
 
@@ -1107,7 +1095,7 @@ def register(ctx) -> None:
         ctx.register_skill("brainlace", skill_path, "Operate Brainlace, LIN's filesystem-first second-brain framework.")
     tools = [
         ("brainlace_read", schemas.BRAINLACE_READ, _tool_read, "Read notes and catalog data."),
-        ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Before operating, load skill_view(\"brainlace:brainlace\")."),
+        ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Run maintenance actions such as indexing."),
         ("brainlace_write", schemas.BRAINLACE_WRITE, _tool_write, "Create, append, patch, or move notes."),
     ]
     for name, schema, handler, description in tools:

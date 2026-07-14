@@ -46,7 +46,7 @@ BRAINLACE_READ = {
 
 BRAINLACE_CONTROL = {
     "name": "brainlace_control",
-    "description": "Before operating, load skill_view(\"brainlace:brainlace\").",
+    "description": "Run maintenance actions such as indexing.",
     "parameters": {
         "type": "object",
         "properties": {
