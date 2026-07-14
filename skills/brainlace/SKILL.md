@@ -45,3 +45,7 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 - Do not bypass Living Roots/other canonical ledgers; Brainlace is for notes and knowledge, not task/calendar truth.
 - Prefer Brainlace mutation tools over raw `patch`/`write_file` for ordinary note edits. Raw file tools remain appropriate when repairing Brainlace itself or when a requested edit is outside the tool surface.
 - For sensitive or relationship notes, preserve the user's meaning and uncertainty layers according to `lin-obsidian` conventions.
+
+## Control-tool contract
+
+`brainlace_control` is maintenance-only. Load this skill first, confirm the target vault with `brainlace_read(view="status")`, then use `action="index"` only when index freshness is needed. Keep archive inclusion and safety caps intentional; verify with a follow-up read.
