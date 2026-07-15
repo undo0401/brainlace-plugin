@@ -3,8 +3,8 @@
 ROOT_PARAM = {"type": "string", "description": "Vault root path."}
 NOTES_ROOT_PARAM = {"type": "string", "description": "Notes root relative to the vault root."}
 LIMIT_PARAM = {"type": "integer", "description": "Max rows.", "minimum": 1}
-REFRESH_PARAM = {"type": "boolean", "description": "Reindex before reading.", "default": False}
-DRY_RUN_PARAM = {"type": "boolean", "description": "Preview only.", "default": False}
+REFRESH_PARAM = {"type": "boolean", "description": "Reindex before reading."}
+DRY_RUN_PARAM = {"type": "boolean", "description": "Preview only."}
 
 COMMON_READ_PROPS = {
     "root": ROOT_PARAM,
@@ -32,7 +32,7 @@ BRAINLACE_READ = {
                     "check_links",
                 ],
                 "description": "Read action/view.",
-                "default": "status",
+
             },
             "query": {"type": "string", "description": "Query or text/path alias."},
             "text": {"type": "string", "description": "Match/planning text."},
@@ -50,10 +50,10 @@ BRAINLACE_CONTROL = {
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["index"], "description": "Control action.", "default": "index"},
+            "action": {"type": "string", "enum": ["index"], "description": "Control action."},
             "root": ROOT_PARAM,
             "notes_root": NOTES_ROOT_PARAM,
-            "include_archives": {"type": "boolean", "description": "Index archive folders.", "default": False},
+            "include_archives": {"type": "boolean", "description": "Index archive folders."},
             "max_notes": {"type": "integer", "description": "Indexed note safety cap.", "minimum": 1},
         },
     },
@@ -73,16 +73,16 @@ BRAINLACE_WRITE = {
             "body": {"type": "string", "description": "Markdown body/append text."},
             "tags": {"type": "array", "items": {"type": "string"}, "description": "Frontmatter tags."},
             "aliases": {"type": "array", "items": {"type": "string"}, "description": "Frontmatter aliases."},
-            "overwrite": {"type": "boolean", "description": "Overwrite existing target.", "default": False},
-            "wire_index": {"type": "boolean", "description": "Update category INDEX.md.", "default": True},
+            "overwrite": {"type": "boolean", "description": "Overwrite existing target."},
+            "wire_index": {"type": "boolean", "description": "Update category INDEX.md."},
             "path": {"type": "string", "description": "Note/source path."},
             "heading": {"type": "string", "description": "Append heading."},
             "old_string": {"type": "string", "description": "Text to find. Must be unique unless replace_all=true."},
             "new_string": {"type": "string", "description": "Replacement text. Empty string deletes."},
-            "replace_all": {"type": "boolean", "description": "Replace all matches.", "default": False},
+            "replace_all": {"type": "boolean", "description": "Replace all matches."},
             "source_path": {"type": "string", "description": "Move source note path."},
             "dest_path": {"type": "string", "description": "Move destination path."},
-            "update_links": {"type": "boolean", "description": "Rewrite inbound wikilinks.", "default": True},
+            "update_links": {"type": "boolean", "description": "Rewrite inbound wikilinks."},
             "dry_run": DRY_RUN_PARAM,
         },
         "required": ["action"],
