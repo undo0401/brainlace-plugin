@@ -33,6 +33,13 @@ def test_register_exposes_catalog_tools():
     plugin.register(ctx)
     names = {tool["name"] for tool in ctx.tools}
     assert names == {"brainlace_read", "brainlace_control", "brainlace_write"}
+    assert ctx.skills == [
+        (
+            "brainlace",
+            plugin.PLUGIN_DIR / "skills" / "brainlace" / "SKILL.md",
+            "Operate Brainlace, LIN's filesystem-first second-brain framework.",
+        )
+    ]
 
 
 def test_index_search_create_append_patch_move_plan_check_links():

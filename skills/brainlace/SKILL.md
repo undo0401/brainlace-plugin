@@ -24,11 +24,11 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 5. Use `brainlace_read(view="describe_note")` on a candidate before treating it as context, especially when the note may be design/history/lore rather than current source of truth.
 6. Use `brainlace_read(view="related")` when the user gives a loose idea and LIN needs likely context.
 7. Use `brainlace_read(view="plan_note_update")` when deciding whether a thought belongs in an existing note or a new note.
-10. Use `brainlace_write(action="create_note")` for new durable notes; keep `wire_index=true` unless intentionally creating an unlinked scratch note.
-11. Use `brainlace_write(action="append_note")` for small additions to existing notes.
-12. Use `brainlace_write(action="patch_note")` for targeted replacements and link repairs; inspect the returned diff.
-13. Use `brainlace_write(action="move_note")` for note moves/renames so inbound wikilinks and destination `INDEX.md` wiring can be handled together.
-14. Use `brainlace_read(view="check_links")` after structural changes or when notes feel messy.
+8. Use `brainlace_write(action="create_note")` for new durable notes; keep `wire_index=true` unless intentionally creating an unlinked scratch note.
+9. Use `brainlace_write(action="append_note")` for small additions to existing notes.
+10. Use `brainlace_write(action="patch_note")` for targeted replacements and link repairs; inspect the returned diff.
+11. Use `brainlace_write(action="move_note")` for note moves/renames so inbound wikilinks and destination `INDEX.md` wiring can be handled together.
+12. Use `brainlace_read(view="check_links")` after structural changes or when notes feel messy.
 
 ## Link / index expectations
 
@@ -41,7 +41,29 @@ Use this skill when operating Brainlace, the editor-agnostic second-brain framew
 
 ## Boundaries
 
-- Do not treat Brainlace as an Obsidian GUI plugin.
+- Do not treat Brainlace as an Obsidian GUI plugin. Obsidian is the human editor today; Brainlace is LIN's operation surface.
 - Do not bypass Living Roots/other canonical ledgers; Brainlace is for notes and knowledge, not task/calendar truth.
-- Prefer Brainlace mutation tools over raw `patch`/`write_file` for ordinary note edits. Raw file tools remain appropriate when repairing Brainlace itself or when a requested edit is outside the tool surface.
-- For sensitive or relationship notes, preserve the user's meaning and uncertainty layers according to `lin-obsidian` conventions.
+- Prefer Brainlace mutation tools over raw `patch`/`write_file` for ordinary note edits. Raw file tools are recovery paths only: repairing Brainlace itself, unavailable tool surface, or an explicitly requested direct file edit.
+- The generic `obsidian` skill is intentionally disabled in this workspace. Do not reactivate it merely for normal note work.
+
+## Durable-note craft
+
+When the user asks to save a chat, a practical memo, or an operational finding:
+
+1. Use `plan_note_update` if the destination is unclear, then create/append/patch through Brainlace.
+2. Preserve the user's current meaning over superseded earlier phrasing. If the evolution matters, make it explicit rather than leaving competing "current" versions.
+3. Keep source text, the user's interpretation, and transcription uncertainty as separate layers for third-party messages or screenshots.
+4. New categories need an `INDEX.md` and a doorway from the existing note tree. Keep indexes human-readable, not generated link dumps.
+5. Operational findings belong in focused, reusable notes: distinguish authoritative support, live-environment reality, and the practical verdict. Link them from the living category rather than a frozen migration memo.
+6. For a change the user will need to remember operationally, keep the reusable note as the source and mirror only a short chronological trace into the diary when appropriate.
+
+For relationship, self-recollection, or LIN-lore notes, preserve agency boundaries and the line that gave the thought its shape; do not flatten them into sterile facts.
+
+## Absorbed guidance
+
+The former local `lin-obsidian` and `operational-wiki-notes` skills are preserved here as historical detailed references:
+
+- `references/absorbed-local-skills/lin-obsidian/` — note semantics, sensitive-writing care, migration and recovery detail.
+- `references/absorbed-local-skills/operational-wiki-notes/` — focused operational runbooks, source-vs-runtime findings, and index hygiene.
+
+Use these references only when the main workflow needs their extra detail. Brainlace itself is the single active note-management entrypoint.
