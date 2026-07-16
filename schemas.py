@@ -36,7 +36,6 @@ BRAINLACE_READ = {
             "text": {"type": "string", "description": "Match/planning text."},
             "task_type": {"type": "string", "description": "Task lens."},
             "path": {"type": "string", "description": "Note path."},
-            "note": {"type": "string", "description": "Alias for path."},
             "action_hint": {"type": "string", "description": "Preferred update action."},
         },
     },

@@ -41,7 +41,10 @@ def test_register_exposes_catalog_tools():
         )
     ]
     for tool in ctx.tools:
-        assert "root" not in tool["schema"]["parameters"]["properties"]
+        properties = tool["schema"]["parameters"]["properties"]
+        assert "root" not in properties
+    read_schema = next(tool["schema"] for tool in ctx.tools if tool["name"] == "brainlace_read")
+    assert "note" not in read_schema["parameters"]["properties"]
 
 
 def test_index_search_create_append_patch_move_plan_check_links():
