@@ -40,6 +40,8 @@ def test_register_exposes_catalog_tools():
             "Operate Brainlace, LIN's filesystem-first second-brain framework.",
         )
     ]
+    for tool in ctx.tools:
+        assert "root" not in tool["schema"]["parameters"]["properties"]
 
 
 def test_index_search_create_append_patch_move_plan_check_links():

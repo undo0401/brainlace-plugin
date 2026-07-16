@@ -1,13 +1,11 @@
 """Tool schemas for the Brainlace Hermes plugin."""
 
-ROOT_PARAM = {"type": "string", "description": "Vault root path."}
 NOTES_ROOT_PARAM = {"type": "string", "description": "Notes root relative to the vault root."}
 LIMIT_PARAM = {"type": "integer", "description": "Max rows.", "minimum": 1}
 REFRESH_PARAM = {"type": "boolean", "description": "Reindex before reading."}
 DRY_RUN_PARAM = {"type": "boolean", "description": "Preview only."}
 
 COMMON_READ_PROPS = {
-    "root": ROOT_PARAM,
     "notes_root": NOTES_ROOT_PARAM,
     "refresh": REFRESH_PARAM,
     "limit": LIMIT_PARAM,
@@ -51,7 +49,6 @@ BRAINLACE_CONTROL = {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["index"], "description": "Control action."},
-            "root": ROOT_PARAM,
             "notes_root": NOTES_ROOT_PARAM,
             "include_archives": {"type": "boolean", "description": "Index archive folders."},
             "max_notes": {"type": "integer", "description": "Indexed note safety cap.", "minimum": 1},
@@ -66,7 +63,6 @@ BRAINLACE_WRITE = {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["create_note", "append_note", "patch_note", "move_note"], "description": "Write action."},
-            "root": ROOT_PARAM,
             "notes_root": NOTES_ROOT_PARAM,
             "category": {"type": "string", "description": "Note category."},
             "title": {"type": "string", "description": "Note title."},
