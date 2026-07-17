@@ -8,7 +8,8 @@ author: LIN
 
 ## Public tools
 
-- `brainlace_read` — vault status、catalog、search、related、note description、link check
+- `brainlace_status` — vault root、notes root、index 状態
+- `brainlace_read` — catalog、search、related、note description、link check
 - `brainlace_write` — note create、append、patch、move
 - `brainlace_control` — index / maintenance action
 

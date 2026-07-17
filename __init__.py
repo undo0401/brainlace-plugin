@@ -1095,6 +1095,7 @@ def register(ctx) -> None:
         ctx.register_skill("brainlace", skill_path, "Operate Brainlace, LIN's filesystem-first second-brain framework.")
     tools = [
         ("brainlace_read", schemas.BRAINLACE_READ, _tool_read, "Read notes and catalog data."),
+        ("brainlace_status", schemas.BRAINLACE_STATUS, _tool_status, "Read Brainlace index and note-catalog status."),
         ("brainlace_control", schemas.BRAINLACE_CONTROL, _tool_control, "Run maintenance actions such as indexing."),
         ("brainlace_write", schemas.BRAINLACE_WRITE, _tool_write, "Create, append, patch, or move notes."),
     ]

@@ -41,6 +41,13 @@ BRAINLACE_READ = {
     },
 }
 
+BRAINLACE_STATUS = {
+    "name": "brainlace_status",
+    "description": "Read Brainlace index and note-catalog status.",
+    "parameters": {"type": "object", "properties": {**COMMON_READ_PROPS}},
+}
+
+
 BRAINLACE_CONTROL = {
     "name": "brainlace_control",
     "description": "Run maintenance actions such as indexing.",

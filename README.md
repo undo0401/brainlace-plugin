@@ -14,7 +14,8 @@ Humans can keep editing Markdown notes in Obsidian or any future editor. Brainla
 
 Brainlace exposes grouped router tools instead of many one-action tools:
 
-- `brainlace_read(view="status|search|related|catalog_search|describe_note|plan_note_update|check_links")`
+- `brainlace_status()` — vault root、notes root、index 状態を読む
+- `brainlace_read(view="search|related|catalog_search|describe_note|plan_note_update|check_links")`
 - `brainlace_control(action="index")`
 - `brainlace_write(action="create_note|append_note|patch_note|move_note")`
 
