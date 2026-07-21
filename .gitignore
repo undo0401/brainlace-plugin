@@ -13,3 +13,14 @@ venv/
 *.log
 *.tmp
 .DS_Store
+
+# Standard runtime-local policy.
+!defaults/
+!defaults/**
+/config/*
+!/config/*.example.*
+!/config/README.md
+/state/
+/logs/
+*.py[cod]
+.pytest_cache/
